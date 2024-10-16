@@ -52,6 +52,9 @@
 #define STAND_ANIM_FRAMES 2
 #define RUN_ANIM_FRAMES 4
 
+// scrolling background
+#define NES_MIRRORING 1
+
 
 // PALETTE setup
 
@@ -191,6 +194,11 @@ unsigned char anim_delay_counter = 0; // animation frame delay counter
 unsigned char current_anim_delay = ANIM_DELAY_IDLE; 
 const unsigned char* const* current_seq; // current animation sequence
 
+/* Scrolling background */
+unsigned int scroll_x = 0;
+
+
+/* Scrolling background */
 
 // Function prototypes
 void setup_graphics();
@@ -246,32 +254,46 @@ void update_player() {
 
 
 void update_player_input() {
-  
-  char pad = pad_poll(0); // Get input from controller 0 (first player)
-  
-  // Horizontal movement
-  if ((pad & PAD_LEFT) && (player_x > SCREEN_LEFT_EDGE)) {
-      player_dx = -PLAYER_SPEED;
-      player_facing_right = false;
-      player_facing_left = true;
-  } 
-  else if (pad & PAD_RIGHT && player_x < SCREEN_RIGHT_EDGE) {
-      player_dx = PLAYER_SPEED;
-      player_facing_left = false;
-      player_facing_right = true;
-  } 
-  else {
-      player_dx = 0;
-  }
+    char pad = pad_poll(0); // Get input from controller 0 (first player)
 
-  // Jumping
-  if (is_on_ground && (pad & PAD_A) && can_jump) {
-    player_dy = JUMP_SPEED;       // apply jump force
-    is_on_ground = false;         // player is no longer on the ground
-    can_jump = false;             // Prevent jumping again until cooldown is over
-    jump_timer = JUMP_COOLDOWN;   // Start jump cooldown
-  }
+    // Horizontal movement
+    if ((pad & PAD_LEFT) && (player_x > SCREEN_LEFT_EDGE)) {
+       // player_dx = -PLAYER_SPEED;
+        player_facing_right = false;
+        player_facing_left = true;
+        if (player_x < SCREEN_RIGHT_EDGE / 2) {
+        	player_dx = -PLAYER_SPEED;
+        } else {
+         	scroll_x -= PLAYER_SPEED;
+          	player_dx = 0;
+        }
+    }
+    else if ((pad & PAD_RIGHT)) {
+        if (player_x < SCREEN_RIGHT_EDGE / 2) {
+            // Move player until halfway point of screen
+            player_dx = PLAYER_SPEED;
+        } else {
+            // Scroll the background instead of moving the player
+            scroll_x += PLAYER_SPEED;
+           // if (scroll_x >= 500) scroll_x = 0;  // wrap scroll_x to prevent overflow
+            player_dx = 0;  // Stop the player from moving further
+        }
+        player_facing_left = false;
+        player_facing_right = true;
+    } 
+    else {
+        player_dx = 0;
+    }
+
+    // Jumping
+    if (is_on_ground && (pad & PAD_A) && can_jump) {
+        player_dy = JUMP_SPEED;       // apply jump force
+        is_on_ground = false;         // player is no longer on the ground
+        can_jump = false;             // Prevent jumping again until cooldown is over
+        jump_timer = JUMP_COOLDOWN;   // Start jump cooldown
+    }
 }
+
 
 void update_player_physics(int *new_y) {
 
@@ -417,13 +439,9 @@ bool check_collision_for_player(int new_x, int new_y) {
 
 
 
-
-
-  
-
-
 // Main game loop
 void main(void) {
+
   char oam_id = 0;
   unsigned char anim_frame = 0;
 
@@ -435,6 +453,7 @@ void main(void) {
   setup_graphics();
 
   initialize_player();
+  
 
   // Game loop
   while (1) {
@@ -442,6 +461,9 @@ void main(void) {
 
     // Update player movement and state
     update_player();
+    
+    // Scroll background based on player's movement
+     scroll(scroll_x, 0);  // Scroll horizontally (scroll_x), no vertical scroll
 
     // Animate player
     animate_player(&oam_id, &anim_frame);
