@@ -253,45 +253,34 @@ void update_player() {
 }
 
 
+
+
 void update_player_input() {
-    char pad = pad_poll(0); // Get input from controller 0 (first player)
+  
+  char pad = pad_poll(0); // Get input from controller 0 (first player)
+  
+  // Horizontal movement
+  if ((pad & PAD_LEFT) && (player_x > SCREEN_LEFT_EDGE)) {
+      player_dx = -PLAYER_SPEED;
+      player_facing_right = false;
+      player_facing_left = true;
+  } 
+  else if (pad & PAD_RIGHT && player_x < SCREEN_RIGHT_EDGE) {
+      player_dx = PLAYER_SPEED;
+      player_facing_left = false;
+      player_facing_right = true;
+  } 
+  else {
+      player_dx = 0;
+  }
 
-    // Horizontal movement
-    if ((pad & PAD_LEFT) && (player_x > SCREEN_LEFT_EDGE)) {
-       // player_dx = -PLAYER_SPEED;
-        player_facing_right = false;
-        player_facing_left = true;
-        if (player_x < SCREEN_RIGHT_EDGE / 2) {
-        	player_dx = -PLAYER_SPEED;
-        } else {
-         	scroll_x -= PLAYER_SPEED;
-          	player_dx = 0;
-        }
-    }
-    else if ((pad & PAD_RIGHT)) {
-        if (player_x < SCREEN_RIGHT_EDGE / 2) {
-            // Move player until halfway point of screen
-            player_dx = PLAYER_SPEED;
-        } else {
-            // Scroll the background instead of moving the player
-            scroll_x += PLAYER_SPEED;
-           // if (scroll_x >= 500) scroll_x = 0;  // wrap scroll_x to prevent overflow
-            player_dx = 0;  // Stop the player from moving further
-        }
-        player_facing_left = false;
-        player_facing_right = true;
-    } 
-    else {
-        player_dx = 0;
-    }
-
-    // Jumping
-    if (is_on_ground && (pad & PAD_A) && can_jump) {
-        player_dy = JUMP_SPEED;       // apply jump force
-        is_on_ground = false;         // player is no longer on the ground
-        can_jump = false;             // Prevent jumping again until cooldown is over
-        jump_timer = JUMP_COOLDOWN;   // Start jump cooldown
-    }
+  // Jumping
+  if (is_on_ground && (pad & PAD_A) && can_jump) {
+    player_dy = JUMP_SPEED;       // apply jump force
+    is_on_ground = false;         // player is no longer on the ground
+    can_jump = false;             // Prevent jumping again until cooldown is over
+    jump_timer = JUMP_COOLDOWN;   // Start jump cooldown
+  }
 }
 
 
@@ -328,6 +317,7 @@ void update_player_position() {
     // Horizontal collision
     if (!check_collision_for_player(new_x, player_y)) {
         player_x = new_x;  // Update X position if no horizontal collision
+    
     }
 
     // Vertical collision
@@ -437,6 +427,32 @@ bool check_collision_for_player(int new_x, int new_y) {
 }
 
 
+void scroll_background() {
+  char pad = pad_poll(0); // Get input from controller 0 (first player)
+    // Scroll when moving right and background scroll limit is not reached
+    if ((pad & PAD_RIGHT) && player_x >= SCREEN_WIDTH / 2 && scroll_x <= 256) {
+        scroll_x += PLAYER_SPEED;  // Scroll background to the left
+      
+        player_x = SCREEN_WIDTH / 2;
+ 
+    }
+
+    // Scroll when moving left and not before the starting point
+    if ((pad & PAD_LEFT) && scroll_x > 0) {
+        scroll_x -= PLAYER_SPEED;  // Scroll background to the right
+        //if (scroll_x <= 160){
+          player_x = SCREEN_WIDTH / 2;
+        //}
+      
+      	if (scroll_x <= 0) scroll_x = 0;  // Ensure scroll_x does not go below 0
+   	
+    }
+    
+    // Apply the scroll to the PPU
+    scroll(scroll_x, 0);  // Apply horizontal scroll, vertical scroll remains 0
+}
+
+
 
 
 // Main game loop
@@ -461,6 +477,9 @@ void main(void) {
 
     // Update player movement and state
     update_player();
+    
+    // Scroll background based on player's movement
+    scroll_background();  // Call the scrolling function
     
     // Scroll background based on player's movement
      scroll(scroll_x, 0);  // Scroll horizontally (scroll_x), no vertical scroll
