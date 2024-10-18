@@ -430,22 +430,20 @@ bool check_collision_for_player(int new_x, int new_y) {
 void scroll_background() {
   char pad = pad_poll(0); // Get input from controller 0 (first player)
     // Scroll when moving right and background scroll limit is not reached
-    if ((pad & PAD_RIGHT) && player_x >= SCREEN_WIDTH / 2 && scroll_x <= 256) {
+    if ((pad & PAD_RIGHT) && (player_x >= SCREEN_WIDTH / 2) && (scroll_x <= 256)) {
         scroll_x += PLAYER_SPEED;  // Scroll background to the left
-      
         player_x = SCREEN_WIDTH / 2;
- 
+      	//vram_adr(NAMETABLE_A);
+ 	//vram_write(hollow_nes_nt_1, 1024);
     }
 
     // Scroll when moving left and not before the starting point
-    if ((pad & PAD_LEFT) && scroll_x > 0) {
+    if ((pad & PAD_LEFT) && (player_x <= SCREEN_WIDTH / 2) && (scroll_x > 0)) {
         scroll_x -= PLAYER_SPEED;  // Scroll background to the right
-        //if (scroll_x <= 160){
-          player_x = SCREEN_WIDTH / 2;
-        //}
-      
-      	if (scroll_x <= 0) scroll_x = 0;  // Ensure scroll_x does not go below 0
-   	
+        player_x = SCREEN_WIDTH / 2;
+      	if (scroll_x <= 0){
+        	scroll_x = 0;  // Ensure scroll_x does not go below 0
+        }
     }
     
     // Apply the scroll to the PPU
