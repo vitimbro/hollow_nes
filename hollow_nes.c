@@ -17,7 +17,9 @@
 //#link "hollow_nes_chr.s"
 
 //include nametables 
+
 #include "hollow_nes_nt_1.h"
+#include "hollow_nes_nt_2.h"
 
 // CONSTANTS
 
@@ -427,14 +429,19 @@ bool check_collision_for_player(int new_x, int new_y) {
 }
 
 
+
+void update_graphics() {
+	// function if needed
+}
+
 void scroll_background() {
   char pad = pad_poll(0); // Get input from controller 0 (first player)
     // Scroll when moving right and background scroll limit is not reached
     if ((pad & PAD_RIGHT) && (player_x >= SCREEN_WIDTH / 2) && (scroll_x <= 256)) {
         scroll_x += PLAYER_SPEED;  // Scroll background to the left
         player_x = SCREEN_WIDTH / 2;
-      	//vram_adr(NAMETABLE_A);
- 	//vram_write(hollow_nes_nt_1, 1024);
+     	// update_graphics();
+       
     }
 
     // Scroll when moving left and not before the starting point
@@ -445,7 +452,7 @@ void scroll_background() {
         	scroll_x = 0;  // Ensure scroll_x does not go below 0
         }
     }
-    
+ 
     // Apply the scroll to the PPU
     scroll(scroll_x, 0);  // Apply horizontal scroll, vertical scroll remains 0
 }
@@ -460,8 +467,10 @@ void main(void) {
   unsigned char anim_frame = 0;
 
   // Load background
-  vram_adr(NAMETABLE_A);
-  vram_write(hollow_nes_nt_1, 1024);
+ vram_adr(NAMETABLE_A);
+ vram_write(hollow_nes_nt_1, 1024);
+ vram_adr(NAMETABLE_B);
+ vram_write(hollow_nes_nt_2, 1024);
 
   // Initialize graphics and player
   setup_graphics();
