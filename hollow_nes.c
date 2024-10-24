@@ -1,3 +1,4 @@
+
 // Hollow NES - A demake of Hollow Knight for the NES
 
 #include <stdlib.h>
@@ -20,6 +21,8 @@
 
 #include "hollow_nes_nt_1.h"
 #include "hollow_nes_nt_2.h"
+#include "hollow_nes_nt_3.h"
+#include "hollow_nes_nt_4.h"
 
 // CONSTANTS
 
@@ -198,7 +201,7 @@ const unsigned char* const* current_seq; // current animation sequence
 
 /* Scrolling background */
 unsigned int scroll_x = 0;
-
+int current_nt = 0;
 
 /* Scrolling background */
 
@@ -431,18 +434,38 @@ bool check_collision_for_player(int new_x, int new_y) {
 
 
 void update_graphics() {
-	// function if needed
+	ppu_off();
+  
+  	ppu_on_all();
 }
+int need_scroll_more = 0;
+int not_need_scroll = 0;
+int need_unscroll = 0;
+int not_need_unscroll = 0;
 
 void scroll_background() {
   char pad = pad_poll(0); // Get input from controller 0 (first player)
     // Scroll when moving right and background scroll limit is not reached
-    if ((pad & PAD_RIGHT) && (player_x >= SCREEN_WIDTH / 2) && (scroll_x <= 256)) {
+    if ((pad & PAD_RIGHT) && (player_x >= SCREEN_WIDTH / 2) && (scroll_x <= 256*2)) {
         scroll_x += PLAYER_SPEED;  // Scroll background to the left
         player_x = SCREEN_WIDTH / 2;
      	// update_graphics();
-       
     }
+    if ((pad & PAD_RIGHT) && (player_x >= SCREEN_WIDTH / 2) && (scroll_x > 256) && (!not_need_scroll)) {
+        need_scroll_more = 1;
+        if (need_scroll_more && !not_need_scroll){
+          ppu_off();
+          vram_adr(NAMETABLE_A);
+          vram_write(hollow_nes_nt_3, 1024);
+          //vram_adr(NAMETABLE_B);
+          //vram_write(hollow_nes_nt_3, 1024);
+          ppu_on_all();
+          not_need_scroll = 1;
+          need_unscroll = 0;
+	  not_need_unscroll = 0;
+    	}
+    }
+   
 
     // Scroll when moving left and not before the starting point
     if ((pad & PAD_LEFT) && (player_x <= SCREEN_WIDTH / 2) && (scroll_x > 0)) {
@@ -451,6 +474,20 @@ void scroll_background() {
       	if (scroll_x <= 0){
         	scroll_x = 0;  // Ensure scroll_x does not go below 0
         }
+    }
+     if ((pad & PAD_LEFT) && (player_x <= SCREEN_WIDTH / 2) && (scroll_x < 256) && (!not_need_unscroll)) {
+        need_unscroll = 1;
+        if (need_unscroll && !not_need_unscroll){
+          ppu_off();
+          vram_adr(NAMETABLE_A);
+          vram_write(hollow_nes_nt_1, 1024);
+          //vram_adr(NAMETABLE_B);
+          //vram_write(hollow_nes_nt_3, 1024);
+          ppu_on_all();
+          not_need_unscroll = 1;
+          need_scroll_more = 0;
+          not_need_scroll = 0;
+    	}
     }
  
     // Apply the scroll to the PPU
@@ -462,7 +499,7 @@ void scroll_background() {
 
 // Main game loop
 void main(void) {
-
+  	
   char oam_id = 0;
   unsigned char anim_frame = 0;
 
