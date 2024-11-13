@@ -113,7 +113,7 @@ extern char sfx_data[];
 #define STATE_CHANGE_DELAY 10            // Minimum frames between state changes
 #define MAX_JUMP_HOLD_TIME 40            // Max frames for holding jump
 #define ATTACK_COOLDOWN 36               // Cooldown frames after attack
-#define FADE_TIME 10                      // Fade in/out duration in frames
+#define FADE_TIME 6                      // Fade in/out duration in frames
 
 // Game State Definitions
 #define STATE_MENU  0
@@ -166,6 +166,10 @@ extern char sfx_data[];
 #define TILE_MASK_FULL 0xb7
 #define TILE_MASK_EMPTY 0xb8
 
+// Define Elder Bug position in nametable 1
+#define ELDER_BUG_X 72  // Adjust for center positioning in nametable
+#define ELDER_BUG_Y 168   // Adjust for Y-axis positioning
+
 
 // Metasprites (Define player appearance)
 #define DEF_METASPRITE_2x2(name,code,pal) \
@@ -200,12 +204,12 @@ extern char sfx_data[];
 // Metasprites Elder Bug
 #define DEF_METASPRITE_2x3(name,code,pal) \
     const unsigned char name[]={          \
-        8, 0, (code)+0, pal,              \
-        0, 0, (code)+1, pal,              \
+        0, 0, (code)+0, pal,              \
+        8, 0, (code)+1, pal,              \
         0, 8, (code)+2, pal,              \
         8, 8, (code)+3, pal,              \
-        0, 16, (code)+4, pal,             \
-        8, 16, (code)+5, pal,             \
+        0, 16, (code)+4, pal,              \
+        8, 16, (code)+5, pal,              \
         128                               \
     };
 
@@ -248,16 +252,16 @@ const unsigned char collision_properties[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 3
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 4
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 5
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 6
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 7
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 0, 0, 0, // 6
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 0, 0, 0, // 7
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, // 8
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, // 9
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // a
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // b
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // c
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, // d
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, // e
-    0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 3, 3, 0, 0, 0, 0, // f
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // d
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // e
+    0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, // f
   
 };
 
@@ -332,9 +336,8 @@ DEF_METASPRITE_2x2_V_FLIP(strike_D, 0x165, 2);          // Strike Down
 //--------------------------------------------------------------------------------//
 
 
-DEF_METASPRITE_2x3(elder_bug, 0x1d0, 2);
-
-
+DEF_METASPRITE_2x3(elder_bug_idle_1, 0x1d0, 2);
+DEF_METASPRITE_2x3(elder_bug_idle_2, 0x1e0, 2);
 
 
 //----------------------------------------------------------------------------------------//
@@ -366,6 +369,12 @@ const unsigned char* const player_D_attack_seq[ATTACK_ANIM_FRAMES] = { player_R_
 // Heal sequences
 const unsigned char* const player_L_heal_seq[HEAL_ANIM_FRAMES] = { player_L_heal_1, player_L_heal_2, player_L_heal_1, player_L_heal_2, player_L_heal_3, player_L_heal_3 };
 const unsigned char* const player_R_heal_seq[HEAL_ANIM_FRAMES] = { player_R_heal_1, player_R_heal_2, player_R_heal_1, player_R_heal_2, player_R_heal_3, player_R_heal_3 };
+
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
+
+// Elder bug Idle sequence
+const unsigned char* const elderbug_idle_seq[IDLE_ANIM_FRAMES] = { elder_bug_idle_1, elder_bug_idle_2 };
+
 
 
 
@@ -486,10 +495,10 @@ typedef struct {
 } Dialogue;
 
 Dialogue dialogues[] = {
-    {"HELLO, WORLD!", 1},
+    {"HELLO!", 1},
     {"HOW ARE YOU DOING?", 2},
-    {"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", 3},
-    {"THIS IS A SIMPLE DIALO -GUE SYSTEM.", -1}
+    {"DID YOU KNOW YOU COULD  HEAL BY PRESSING \x1d ?", 3},
+    {"YOU CAN ALSO ATTACK BY  PRESSING B.", -1}
 };
 
 // Global variables for dialogue
@@ -507,6 +516,11 @@ unsigned char soul_tile_bottom_2 = TILE_SOUL_BOTTOM_FULL_2;
 unsigned char mask_tile_1 = TILE_MASK_FULL;
 unsigned char mask_tile_2 = TILE_MASK_FULL;
 unsigned char mask_tile_3 = TILE_MASK_FULL;
+
+
+unsigned char elder_bug_anim_frame = 0;    // Animation frame index for Elder Bug
+unsigned char elder_bug_delay_counter = 0; // Frame delay for idle animation
+
 
 //------------------------------------------------------------------------------------//
 //                              FUNCTION PROTOTYPES                                   //
@@ -980,6 +994,7 @@ bool handle_collision(unsigned char collision_type) {
 void handle_spike_collision() {
     if (damage_cooldown == 0) { // Only damage if cooldown has elapsed
         player_lives--;
+        sfx_play(0,0);
         if (player_lives > 0) {
             fade_out();
             reset_player_position(); // Reset player position if needed
@@ -1354,8 +1369,19 @@ void draw_strike(unsigned char* oam_id) {
     }
 }
 
+//---------------------------------------------------------------------------------------//
 
+// Function to animate the Elder Bug
+void animate_elder_bug(unsigned char* oam_id) {
+    // Idle animation update
+    if (elder_bug_delay_counter == 0) {
+        elder_bug_anim_frame = (elder_bug_anim_frame + 1) % IDLE_ANIM_FRAMES;
+    }
+    elder_bug_delay_counter = (elder_bug_delay_counter + 1) % ANIM_DELAY_IDLE;
 
+    // Draw the current Elder Bug frame in a fixed position
+    *oam_id = oam_meta_spr(ELDER_BUG_X, ELDER_BUG_Y, *oam_id, elderbug_idle_seq[elder_bug_anim_frame]);
+}
 
 //---------------------------------------------------------------------------------------//
 //                             GAME STATE FUNCTIONS                                      //
@@ -1428,6 +1454,11 @@ void update_game() {
   animate_player(&oam_id, &anim_frame);
   
   update_interaction_indicator(&oam_id);  // Update the interaction arrow indicator
+  
+  // Draw Elder Bug
+  if (current_nametable_index == 0) {  // Only draw if player is in nametable 1
+      animate_elder_bug(&oam_id);
+  }
   
   update_hud();
   
