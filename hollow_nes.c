@@ -87,7 +87,7 @@ extern char sfx_data[];
 
 // Physics Constants
 #define GRAVITY 4                        // Gravity applied to the player
-#define FALL_GRAVITY 8                  // Increased gravity during falls
+#define FALL_GRAVITY 10                  // Increased gravity during falls
 #define MAX_FALL_SPEED 96                // Max fall speed in subpixels
 #define JUMP_SPEED -96                   // Initial jump velocity
 #define JUMP_COOLDOWN 8                  // Frames before jump is allowed again
@@ -131,7 +131,7 @@ extern char sfx_data[];
 // Life and Soul Constants
 #define MAX_LIVES 3                    // Maximum number of lives
 #define MAX_SOUL 60                    // Maximum amount of soul
-#define SOUL_PER_HIT 10                // Soul gained per hit on enemy
+#define SOUL_GAIN 10                // Soul gained per hit on enemy
 #define SOUL_COST_HEAL 30              // Soul required to heal
 
 // Define collision types
@@ -170,6 +170,14 @@ extern char sfx_data[];
 #define ELDER_BUG_X 72  // Adjust for center positioning in nametable
 #define ELDER_BUG_Y 168   // Adjust for Y-axis positioning
 
+#define CRAWLID_Y 183
+#define CRAWLID_RUN_ANIM_FRAMES 2
+
+#define CRAWLID_HP 60
+#define DAMAGE_AMOUNT 20
+
+// Constants for Stun Duration
+#define STUN_DURATION 30  // Number of frames the Crawlid is stunned
 
 // Metasprites (Define player appearance)
 #define DEF_METASPRITE_2x2(name,code,pal) \
@@ -201,7 +209,7 @@ extern char sfx_data[];
         128                                     \
     };
 
-// Metasprites Elder Bug
+// Metasprites Elder Bug (2x3)
 #define DEF_METASPRITE_2x3(name,code,pal) \
     const unsigned char name[]={          \
         0, 0, (code)+0, pal,              \
@@ -213,8 +221,21 @@ extern char sfx_data[];
         128                               \
     };
 
+// Metasprites Crawlid (2x1)
+#define DEF_METASPRITE_2x1(name,code,pal) \
+    const unsigned char name[]={          \
+        0, 0, (code)+0, pal,              \
+        8, 0, (code)+1, pal,              \
+        128                               \
+    };
 
-
+// Metasprite Crawlid Horizontal-Flip Definition                        
+#define DEF_METASPRITE_2x1_H_FLIP(name,code,pal) \
+    const unsigned char name[]={                 \
+        8, 0, (code)+0, (pal)|OAM_FLIP_H,       \
+        0, 0, (code)+1, (pal)|OAM_FLIP_H,       \
+        128                                     \
+    };
 
 //------------------------------------------------------------------------------//
 //                              PALETTE setup                                   //
@@ -332,13 +353,19 @@ DEF_METASPRITE_2x2_V_FLIP(strike_D, 0x165, 2);          // Strike Down
 
 
 //--------------------------------------------------------------------------------//
-//                         MOBS AND NPCS METASPRITES DEFINITIONS                         //
+//                         MOBS AND NPCS METASPRITES DEFINITIONS                  //
 //--------------------------------------------------------------------------------//
 
-
+//------- Elder Bug -----------//
 DEF_METASPRITE_2x3(elder_bug_idle_1, 0x1d0, 2);
 DEF_METASPRITE_2x3(elder_bug_idle_2, 0x1e0, 2);
 
+//------- Crawlid -------------//
+DEF_METASPRITE_2x1(crawlid_R_run_1, 0x170, 2);
+DEF_METASPRITE_2x1(crawlid_R_run_2, 0x180, 2);
+
+DEF_METASPRITE_2x1_H_FLIP(crawlid_L_run_1, 0x170, 2);
+DEF_METASPRITE_2x1_H_FLIP(crawlid_L_run_2, 0x180, 2);
 
 //----------------------------------------------------------------------------------------//
 //                               PLAYER ANIMATION SEQUENCES                               //
@@ -375,7 +402,9 @@ const unsigned char* const player_R_heal_seq[HEAL_ANIM_FRAMES] = { player_R_heal
 // Elder bug Idle sequence
 const unsigned char* const elderbug_idle_seq[IDLE_ANIM_FRAMES] = { elder_bug_idle_1, elder_bug_idle_2 };
 
-
+// Crawlid Run sequences
+const unsigned char* const crawlid_L_run_seq[CRAWLID_RUN_ANIM_FRAMES] = { crawlid_L_run_1, crawlid_L_run_2 };
+const unsigned char* const crawlid_R_run_seq[CRAWLID_RUN_ANIM_FRAMES] = { crawlid_R_run_1, crawlid_R_run_2 };
 
 
 //-------------------------------------------------------------------------------------------//
@@ -394,6 +423,11 @@ typedef enum {
     STATE_DIALOGUE   // Player is in a dialogue
 } PlayerState;
 
+// CRAWLID STATE CONSTANTS
+typedef enum { 
+    STATE_ALIVE,    // Player is idle
+    STATE_DEAD,     // Player is running
+} CrawlidState;
 
 // PLAYER POSITION AND MOVEMENT VARIABLES
 
@@ -521,6 +555,15 @@ unsigned char mask_tile_3 = TILE_MASK_FULL;
 unsigned char elder_bug_anim_frame = 0;    // Animation frame index for Elder Bug
 unsigned char elder_bug_delay_counter = 0; // Frame delay for idle animation
 
+// Global Variables for Crawlid's Position and State
+unsigned char crawlid_x = 120;     // Starting x-position (center of screen)
+unsigned char crawlid_direction = 1;  // 1 for right, -1 for left
+unsigned char crawlid_anim_frame = 0;
+unsigned char crawlid_anim_delay_counter = 0;
+
+int crawlid_hp = CRAWLID_HP;
+CrawlidState crawlid_state = STATE_ALIVE;
+int stun_timer = 0;         // Timer for stun duration
 
 //------------------------------------------------------------------------------------//
 //                              FUNCTION PROTOTYPES                                   //
@@ -629,6 +672,19 @@ void update_hud();
 void load_new_nametable(unsigned char new_nametable_index);
 void check_screen_transition();
 
+void update_crawlid_position();
+void animate_crawlid(unsigned char* oam_id);
+
+bool check_sprite_collision(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2);
+void handle_player_crawlid_collision(int player_x, int player_y, int crawlid_x, int crawlid_y);
+
+void take_damage();
+void handle_death();
+
+
+void handle_player_strike();
+void handle_crawlid_damage(int* crawlid_hp, CrawlidState* crawlid_state);
+void handle_strike_crawlid_collision(int strike_x, int strike_y, int crawlid_x, int crawlid_y, int* crawlid_hp, CrawlidState* crawlid_state);
 
 //---------------------------------------------------------------------------------------//
 //                            SETUP AND INITIALIZATION                                   //
@@ -671,6 +727,8 @@ void initialize_player() {
   
     player_lives = MAX_LIVES;
     player_soul = 60;
+  
+    current_nametable_index = 0;
 }
 
 
@@ -990,24 +1048,9 @@ bool handle_collision(unsigned char collision_type) {
     return false;
 }
 
-// Handle spike collision - reduce player life with cooldown check
+// Handle spike collision
 void handle_spike_collision() {
-    if (damage_cooldown == 0) { // Only damage if cooldown has elapsed
-        player_lives--;
-        sfx_play(0,0);
-        if (player_lives > 0) {
-            fade_out();
-            reset_player_position(); // Reset player position if needed
-            damage_cooldown = DAMAGE_COOLDOWN; // Start cooldown
-            fade_in();
-        } else {
-            // Player death/game over state
-            game_state = STATE_DEATH;
-            fade_out();
-            setup_death();
-            fade_in();
-        }
-    }
+    take_damage();  // Call the general damage function
 }
 
 
@@ -1153,6 +1196,86 @@ bool check_player_vertical_collision(int player_x, int new_y) {
     }
 
     return is_solid_collision;
+}
+
+//-------- Collision between sprites ----------------//
+
+
+// Checks for collision between two rectangular sprites
+bool check_sprite_collision(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2) {
+    return !(x1 > x2 + width2 || x2 > x1 + width1 || y1 > y2 + height2 || y2 > y1 + height1);
+}
+
+
+// Updated Crawlid collision to use take_damage function
+void handle_player_crawlid_collision(int player_x, int player_y, int crawlid_x, int crawlid_y) {
+    // Set player and Crawlid dimensions (16x16 for player, 16x8 for Crawlid)
+  
+    if (crawlid_state == STATE_DEAD) return;  // Skip animation if Crawlid is dead 
+  
+    if (check_sprite_collision(player_x, player_y, 16, 16, crawlid_x, crawlid_y, 16, 8)) {
+        take_damage();  // Call the general damage function
+    }
+}
+
+// Check for collision between player's strike and Crawlid
+void handle_strike_crawlid_collision(int strike_x, int strike_y, int crawlid_x, int crawlid_y, int* crawlid_hp, CrawlidState* crawlid_state) {
+    if (*crawlid_state != STATE_DEAD) {  // Only check if Crawlid is alive
+        // Set dimensions for the strike (8x8 or as appropriate for your game)
+        if (check_sprite_collision(strike_x, strike_y, 8, 8, crawlid_x, crawlid_y, 16, 8)) {
+            handle_player_strike();             // Player gains soul upon hitting
+            handle_crawlid_damage(crawlid_hp, crawlid_state);  // Crawlid takes damage
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------//
+//                        Handle damage and death                              //
+//-----------------------------------------------------------------------------//
+
+// Function to handle taking damage, including cooldown and sound effects
+void take_damage() {
+    if (damage_cooldown == 0) {  // Only take damage if cooldown has elapsed
+        player_lives--;
+        sfx_play(0, 0);           // Play damage sound effect
+        damage_cooldown = DAMAGE_COOLDOWN;  // Reset cooldown
+
+        if (player_lives > 0) {
+            fade_out();
+            reset_player_position();  // Optional: reset player position
+            fade_in();
+        } else {
+            handle_death();  // Call death handler if no lives remain
+        }
+    }
+}
+
+// Function to handle player death state
+void handle_death() {
+    game_state = STATE_DEATH;  // Set game state to death
+    fade_out();
+    setup_death();  // Initialize death state (e.g., show death screen, reset variables)
+    fade_in();
+}
+
+
+// Player gains soul on a successful strike
+void handle_player_strike() {
+    player_soul += SOUL_GAIN;  // Increase player's soul count
+    if (player_soul > MAX_SOUL) {
+        player_soul = MAX_SOUL;  // Cap soul to max limit
+    }
+}
+
+// Handle Crawlid's HP reduction and death
+void handle_crawlid_damage(int* crawlid_hp, CrawlidState* crawlid_state) {
+    *crawlid_hp -= DAMAGE_AMOUNT;  // Reduce Crawlid's HP by damage amount
+    stun_timer = STUN_DURATION;    // Set the stun timer
+
+    if (*crawlid_hp <= 0) {
+        *crawlid_state = STATE_DEAD;  // Mark Crawlid as dead
+        // Additional logic, such as removing the sprite or playing a death animation, can go here.
+    }
 }
 
 
@@ -1367,6 +1490,9 @@ void draw_strike(unsigned char* oam_id) {
             *oam_id = oam_meta_spr(strike_x, strike_y, *oam_id, strike_L);
             break;
     }
+  
+    // Check for collision with Crawlid after strike is drawn
+    handle_strike_crawlid_collision(strike_x, strike_y, crawlid_x, CRAWLID_Y, &crawlid_hp, &crawlid_state);
 }
 
 //---------------------------------------------------------------------------------------//
@@ -1383,116 +1509,49 @@ void animate_elder_bug(unsigned char* oam_id) {
     *oam_id = oam_meta_spr(ELDER_BUG_X, ELDER_BUG_Y, *oam_id, elderbug_idle_seq[elder_bug_anim_frame]);
 }
 
-//---------------------------------------------------------------------------------------//
-//                             GAME STATE FUNCTIONS                                      //
-//---------------------------------------------------------------------------------------//
 
-
-//------------------------------- Setup States ------------------------------------//
-
-// Load the nametable for the menu state
-void setup_menu() {
+// Function to update Crawlid's position across the screen
+void update_crawlid_position() {
+    
+    if (stun_timer > 0) {
+        stun_timer--;  // Decrease stun timer each frame
+        return;        // Skip movement if stunned
+    }
   
-  famitone_init(menu_music_data); // Initialize menu music 
-  ppu_off(); // Turn off rendering to safely update VRAM
-  vram_adr(NAMETABLE_A);
-  vram_unrle(nametable_menu);
-  ppu_on_all(); // Turn rendering back on
-  
-  music_play(0); // Play the menu music
-}
+    // Move Crawlid in the current direction
+    crawlid_x += crawlid_direction;
 
-// Load the nametable for the game state
-void setup_game() {
-  ppu_off(); // Turn off rendering to safely update VRAM
-  vram_adr(NAMETABLE_A);
-  vram_write(nametable_game_0, 1024);
-  vram_adr(NAMETABLE_B);
-  vram_write(nametable_game_1, 1024);
-  ppu_on_all(); // Turn rendering back on
-  
-  music_play(0); // Play the gameplay music
-}
-
-// Load the nametable for the death state
-void setup_death() {
-    ppu_off(); // Turn off rendering to safely update VRAM
-    vram_adr(NAMETABLE_A);
-    vram_unrle(nametable_death); // Load the death screen nametable
-    oam_clear();  // Clear all sprites
-    ppu_on_all(); // Turn rendering back on
-    music_stop(); // Play death or game over music
-}
-
-
-//------------------------------- Update States ------------------------------------//
-
-// Handle the menu state
-void update_menu() {
-  // Wait for Start button to begin the game
-  if (pad_trigger(0) & PAD_START) {
-    fade_out(); // Fade out before changing the state
-    music_stop();                 // Stop menu music
-    delay(60);
-    game_state = STATE_GAME; // Switch to game state
-    famitone_init(game_music_data); // Initialize gameplay music
-    setup_game(); // Load game nametable
-    load_hud();
-    fade_in(); // Fade in after loading the new state
-    initialize_player();
-  }
-}
-
-// Handle the game state
-void update_game() {
-  char oam_id = 0; // Reset sprite OAM ID
-
-  // Update player movement and state
-  update_player();
-
-  // Animate player
-  animate_player(&oam_id, &anim_frame);
-  
-  update_interaction_indicator(&oam_id);  // Update the interaction arrow indicator
-  
-  // Draw Elder Bug
-  if (current_nametable_index == 0) {  // Only draw if player is in nametable 1
-      animate_elder_bug(&oam_id);
-  }
-  
-  update_hud();
-  
-  check_screen_transition();
-
-  // Hide unused sprites
-  if (oam_id != 0) oam_hide_rest(oam_id);
-}
-
-
-// Handle the death state
-void update_death() {
-    // Wait for Start button to return to the main menu
-    if (pad_trigger(0) & PAD_START) {
-        fade_out(); // Fade out before changing the state
-        music_stop(); // Stop death music
-        game_state = STATE_MENU; // Switch back to menu
-        setup_menu(); // Load menu nametable
-        fade_in(); // Fade in after loading the menu
+    // Check for screen boundaries and reverse direction if needed
+    if (crawlid_x <= SCREEN_LEFT_EDGE) {
+        crawlid_direction = 1;  // Move right
+    } else if (crawlid_x >= SCREEN_RIGHT_EDGE) {
+        crawlid_direction = -1; // Move left
     }
 }
 
-//------------------------------- Check State ------------------------------------//
-
-// Check the current game state and update accordingly
-void check_game_state() {
-    if (game_state == STATE_MENU) {
-        update_menu();
-    } else if (game_state == STATE_GAME) {
-        update_game();
-    } else if (game_state == STATE_DEATH) {
-        update_death();
+// Function to handle Crawlid's animation and display
+void animate_crawlid(unsigned char* oam_id) {
+  
+    const unsigned char* const* crawlid_seq;
+  
+    if (crawlid_state == STATE_DEAD) return;  // Skip animation if Crawlid is dead  
+  
+    // Only animate if not stunned
+    if (stun_timer == 0) {
+        // Animation frame update
+        if (crawlid_anim_delay_counter == 0) {
+            crawlid_anim_frame = (crawlid_anim_frame + 1) % CRAWLID_RUN_ANIM_FRAMES;
+        }
+        crawlid_anim_delay_counter = (crawlid_anim_delay_counter + 1) % 15;
     }
+
+    // Draw Crawlid's current frame based on direction
+    crawlid_seq = (crawlid_direction == 1) ? crawlid_R_run_seq : crawlid_L_run_seq;
+    *oam_id = oam_meta_spr(crawlid_x, CRAWLID_Y, *oam_id, crawlid_seq[crawlid_anim_frame]);
 }
+
+
+
 //-----------------------------------------------------------------------------//
 //                        Fade In/Out Functions                                //
 //-----------------------------------------------------------------------------//
@@ -1875,7 +1934,123 @@ void update_hud() {
 
 
 
+//---------------------------------------------------------------------------------------//
+//                             GAME STATE FUNCTIONS                                      //
+//---------------------------------------------------------------------------------------//
 
+
+//------------------------------- Setup States ------------------------------------//
+
+// Load the nametable for the menu state
+void setup_menu() {
+  
+  famitone_init(menu_music_data); // Initialize menu music 
+  ppu_off(); // Turn off rendering to safely update VRAM
+  vram_adr(NAMETABLE_A);
+  vram_unrle(nametable_menu);
+  ppu_on_all(); // Turn rendering back on
+  
+  music_play(0); // Play the menu music
+}
+
+// Load the nametable for the game state
+void setup_game() {
+  ppu_off(); // Turn off rendering to safely update VRAM
+  vram_adr(NAMETABLE_A);
+  vram_write(nametable_game_0, 1024);
+  vram_adr(NAMETABLE_B);
+  vram_write(nametable_game_1, 1024);
+  ppu_on_all(); // Turn rendering back on
+  
+  music_play(0); // Play the gameplay music
+}
+
+// Load the nametable for the death state
+void setup_death() {
+    ppu_off(); // Turn off rendering to safely update VRAM
+    vram_adr(NAMETABLE_A);
+    vram_unrle(nametable_death); // Load the death screen nametable
+    oam_clear();  // Clear all sprites
+    ppu_on_all(); // Turn rendering back on
+    music_stop(); // Play death or game over music
+}
+
+
+//------------------------------- Update States ------------------------------------//
+
+// Handle the menu state
+void update_menu() {
+  // Wait for Start button to begin the game
+  if (pad_trigger(0) & PAD_START) {
+    fade_out(); // Fade out before changing the state
+    music_stop();                 // Stop menu music
+    delay(60);
+    game_state = STATE_GAME; // Switch to game state
+    famitone_init(game_music_data); // Initialize gameplay music
+    setup_game(); // Load game nametable
+    load_hud();
+    fade_in(); // Fade in after loading the new state
+    initialize_player();
+  }
+}
+
+// Handle the game state
+void update_game() {
+  char oam_id = 0; // Reset sprite OAM ID
+
+  // Update player movement and state
+  update_player();
+
+  // Animate player
+  animate_player(&oam_id, &anim_frame);
+  
+  update_interaction_indicator(&oam_id);  // Update the interaction arrow indicator
+  
+  // Draw Elder Bug
+  if (current_nametable_index == 0) {  // Only draw if player is in nametable 1
+      animate_elder_bug(&oam_id);
+  }
+  
+  // Update and draw Crawlid if in the correct nametable
+  if (current_nametable_index == 1) {
+      update_crawlid_position();
+      animate_crawlid(&oam_id);
+      handle_player_crawlid_collision(player_x, player_y, crawlid_x, CRAWLID_Y);
+  }
+  
+  update_hud();
+  
+  check_screen_transition();
+
+  // Hide unused sprites
+  if (oam_id != 0) oam_hide_rest(oam_id);
+}
+
+
+// Handle the death state
+void update_death() {
+    // Wait for Start button to return to the main menu
+    if (pad_trigger(0) & PAD_START) {
+        fade_out(); // Fade out before changing the state
+        music_stop(); // Stop death music
+        game_state = STATE_MENU; // Switch back to menu
+        setup_menu(); // Load menu nametable
+        fade_in(); // Fade in after loading the menu
+    }
+}
+
+//------------------------------- Check State ------------------------------------//
+
+// Check the current game state and update accordingly
+void check_game_state() {
+    if (game_state == STATE_MENU) {
+        update_menu();
+    } else if (game_state == STATE_GAME) {
+        update_game();
+    } else if (game_state == STATE_DEATH) {
+        update_death();
+    }
+}
 
 
 
