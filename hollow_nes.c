@@ -179,6 +179,10 @@ extern char sfx_data[];
 // Constants for Stun Duration
 #define STUN_DURATION 30  // Number of frames the Crawlid is stunned
 
+#define STRIKE_COOLDOWN_DURATION 15 // Number of frames before strike can deal damage again
+
+#define FLASH_TIME 6
+
 // Metasprites (Define player appearance)
 #define DEF_METASPRITE_2x2(name,code,pal) \
     const unsigned char name[]={          \
@@ -565,6 +569,16 @@ int crawlid_hp = CRAWLID_HP;
 CrawlidState crawlid_state = STATE_ALIVE;
 int stun_timer = 0;         // Timer for stun duration
 
+int strike_cooldown = 0;
+
+// Soul animation properties
+int soul_x, soul_y;                 // Position of the soul animation
+unsigned char soul_frame = 0;        // Current frame of the soul animation
+bool soul_active = false;       // Whether the soul animation is active
+unsigned char soul_anim_counter = 0; // Counter for controlling the animation speed
+unsigned char soul_anim_delay_counter = 0;
+
+
 //------------------------------------------------------------------------------------//
 //                              FUNCTION PROTOTYPES                                   //
 //------------------------------------------------------------------------------------//
@@ -643,6 +657,7 @@ void check_game_state();
 // Visual effects
 void fade_in();
 void fade_out();
+void flash_screen();
 
 // Background scrolling and nametable loading
 void load_nametable(int index);
@@ -685,6 +700,8 @@ void handle_death();
 void handle_player_strike();
 void handle_crawlid_damage(int* crawlid_hp, CrawlidState* crawlid_state);
 void handle_strike_crawlid_collision(int strike_x, int strike_y, int crawlid_x, int crawlid_y, int* crawlid_hp, CrawlidState* crawlid_state);
+
+void draw_soul_animation(unsigned char* oam_id);
 
 //---------------------------------------------------------------------------------------//
 //                            SETUP AND INITIALIZATION                                   //
@@ -729,6 +746,8 @@ void initialize_player() {
     player_soul = 60;
   
     current_nametable_index = 0;
+    crawlid_hp = CRAWLID_HP;
+  
 }
 
 
@@ -1220,11 +1239,12 @@ void handle_player_crawlid_collision(int player_x, int player_y, int crawlid_x, 
 
 // Check for collision between player's strike and Crawlid
 void handle_strike_crawlid_collision(int strike_x, int strike_y, int crawlid_x, int crawlid_y, int* crawlid_hp, CrawlidState* crawlid_state) {
-    if (*crawlid_state != STATE_DEAD) {  // Only check if Crawlid is alive
+    if (*crawlid_state != STATE_DEAD && strike_cooldown == 0) {  // Only check if Crawlid is alive and no cooldown
         // Set dimensions for the strike (8x8 or as appropriate for your game)
         if (check_sprite_collision(strike_x, strike_y, 8, 8, crawlid_x, crawlid_y, 16, 8)) {
-            handle_player_strike();             // Player gains soul upon hitting
+            handle_player_strike();  // Player gains soul upon hitting
             handle_crawlid_damage(crawlid_hp, crawlid_state);  // Crawlid takes damage
+            strike_cooldown = STRIKE_COOLDOWN_DURATION;  // Start cooldown to prevent immediate re-hit
         }
     }
 }
@@ -1241,9 +1261,10 @@ void take_damage() {
         damage_cooldown = DAMAGE_COOLDOWN;  // Reset cooldown
 
         if (player_lives > 0) {
-            fade_out();
+            
+            flash_screen();
             reset_player_position();  // Optional: reset player position
-            fade_in();
+            
         } else {
             handle_death();  // Call death handler if no lives remain
         }
@@ -1275,9 +1296,40 @@ void handle_crawlid_damage(int* crawlid_hp, CrawlidState* crawlid_state) {
     if (*crawlid_hp <= 0) {
         *crawlid_state = STATE_DEAD;  // Mark Crawlid as dead
         // Additional logic, such as removing the sprite or playing a death animation, can go here.
+        
+        // Trigger soul animation above the Crawlid's position
+        soul_x = crawlid_x;
+        soul_y = CRAWLID_Y - 12;  // Adjust Y position to appear above
+        soul_frame = 0;           // Start with the first frame
+        soul_active = true;          // Activate soul animation
     }
 }
 
+// Function to draw the soul animation above the enemy
+void draw_soul_animation(unsigned char* oam_id) {
+    if (soul_active) {
+        
+        // Toggle between the two frames
+        unsigned char tile = (soul_frame == 0) ? 0x1b0 : 0x1b1;
+        *oam_id = oam_spr(soul_x, soul_y, tile, 0, *oam_id);
+        *oam_id = oam_spr(soul_x, soul_y + 8, tile, 0, *oam_id);
+
+        // Update animation frame using delay counter with wraparound
+        if (soul_anim_delay_counter == 0) {
+            soul_frame = (soul_frame + 1) % 2;  // Alternate between two frames
+        }
+        
+        // Increment the delay counter and wrap it around after the delay threshold
+        soul_anim_delay_counter = (soul_anim_delay_counter + 1) % 10;  // Adjust to control animation speed
+
+        // Optionally, deactivate after some time
+        if (soul_anim_counter >= 40) {  // Adjust duration as needed
+            soul_active = false;
+        }
+        
+        soul_anim_counter++; // Increment the life counter for tracking duration
+    }
+}
 
 //-----------------------------------------------------------------------------//
 //                        Handle Player State                                  //
@@ -1553,7 +1605,7 @@ void animate_crawlid(unsigned char* oam_id) {
 
 
 //-----------------------------------------------------------------------------//
-//                        Fade In/Out Functions                                //
+//                        Fade In/Out And Flash Functions                                //
 //-----------------------------------------------------------------------------//
 
 
@@ -1575,7 +1627,20 @@ void fade_out() {
   fade_done = 1;
 }
 
-
+void flash_screen() {
+    char i;
+    pal_bright(8);        // Set screen to maximum brightness
+    delay(FLASH_TIME);    // Brief delay for the flash
+    pal_bright(2);        // Restore to intermediate brightness
+    delay(FLASH_TIME);    // Slight delay for visual impact
+    pal_bright(8);        // Flash again to make it more noticeable
+    delay(FLASH_TIME); 
+    pal_bright(2);
+    for (i = 2; i <= 4; ++i) {
+        pal_bright(i); // Increase brightness
+        delay(FLASH_TIME); // Wait for next frame
+    }
+}
 
 
 //---------------------------------------------------------------------------------------//
@@ -2006,6 +2071,9 @@ void update_game() {
   
   update_interaction_indicator(&oam_id);  // Update the interaction arrow indicator
   
+  // Draw soul animation if active
+  draw_soul_animation(&oam_id);
+  
   // Draw Elder Bug
   if (current_nametable_index == 0) {  // Only draw if player is in nametable 1
       animate_elder_bug(&oam_id);
@@ -2021,6 +2089,10 @@ void update_game() {
   update_hud();
   
   check_screen_transition();
+  
+  if (strike_cooldown > 0) {
+      strike_cooldown--;
+  }
 
   // Hide unused sprites
   if (oam_id != 0) oam_hide_rest(oam_id);
