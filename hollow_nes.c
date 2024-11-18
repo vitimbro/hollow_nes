@@ -22,12 +22,17 @@
 //#resource "game_tileset_1.chr"       // Character set (CHR) data
 //#link "tileset.s"
 
-// Level Nametables
-#include "nametable_game_0.h"
-#include "nametable_game_1.h"
-#include "nametable_game_2.h"
-#include "nametable_game_3.h"
-#include "nametable_game_4.h"
+// Game Nametables
+// Nametables in first floor (y = 0)
+#include "nametable_game_0_0.h"
+#include "nametable_game_1_0.h"
+#include "nametable_game_2_0.h"
+#include "nametable_game_3_0.h"
+#include "nametable_game_4_0.h"
+// Nametables in second floor (y = 1)
+#include "nametable_game_3_1.h"
+#include "nametable_game_4_1.h"
+#include "nametable_game_5_1.h"
 
 // Menu Nametable
 #include "nametable_menu.h"
@@ -125,7 +130,8 @@ extern char sfx_data[];
 #define SCROLL_SPEED (PLAYER_SPEED / SUBPIXELS)
 
 // Nametable Parameters
-#define NUM_GAME_NAMETABLES 5            // Total game nametables
+#define NUM_GAME_NAMETABLES_X_0 5            // Total game nametables
+#define NUM_GAME_NAMETABLES_X_1 3            // Total game nametables
 #define NAMETABLE_SIZE 256               // Size of each nametable in pixels
 
 // Life and Soul Constants
@@ -485,23 +491,29 @@ unsigned char game_state = STATE_MENU; // Start with menu
 
 
 // Scrolling and nametable variables
-unsigned int scroll_x = 0;
-int current_nametable_load = 0; 
-int current_nametable_player = 0;
+//unsigned int scroll_x = 0;
+//int current_nametable_load = 0; 
+//int current_nametable_player = 0;
 
-// Array of nametable references
-const unsigned char* nametables[] = {
-    nametable_game_0,
-    nametable_game_1,
-    nametable_game_2,
-    nametable_game_3,
-    nametable_game_4
+//-----------------------------------------------------------------------------//
+//                        Nametable References                                 //
+//-----------------------------------------------------------------------------//
+
+// Two-dimensional array of nametables (organized by x, y)
+const unsigned char* nametables[6][2] = {
+    {nametable_game_0_0, NULL},           // Column 0
+    {nametable_game_1_0, NULL},           // Column 1
+    {nametable_game_2_0, NULL},           // Column 2
+    {nametable_game_3_0, nametable_game_3_1},  // Column 3
+    {nametable_game_4_0, nametable_game_4_1},   // Column 4
+    {NULL, nametable_game_5_1},   // Column 4
 };
 
+// Current nametable position
+unsigned char current_nametable_x = 0;  // X index
+unsigned char current_nametable_y = 0;  // Y index
 
-// Global variable to track the current nametable
-unsigned char current_nametable_index = 0;
-
+//---------------------------------------------------------------------------------------//
 
 // Attack direction constants
 typedef enum { 
@@ -684,7 +696,7 @@ void update_lives_indicator();
 void update_hud();
 
 
-void load_new_nametable(unsigned char new_nametable_index);
+void load_new_nametable(unsigned char new_x, unsigned char new_y);
 void check_screen_transition();
 
 void update_crawlid_position();
@@ -745,7 +757,8 @@ void initialize_player() {
     player_lives = MAX_LIVES;
     player_soul = 60;
   
-    current_nametable_index = 0;
+    current_nametable_x = 0;
+    current_nametable_y = 0;
     crawlid_hp = CRAWLID_HP;
   
 }
@@ -1136,10 +1149,12 @@ unsigned char get_tile_at(unsigned char x, unsigned char y) {
     unsigned char tile_x = x / TILE_SIZE;
     unsigned char tile_y = y / TILE_SIZE;
 
-    // Return the tile index from the nametable
-    return nametables[current_nametable_index][tile_x + (tile_y * NAMETABLE_WIDTH)];
-}
+    // Retrieve the current nametable based on the current coordinates
+    const unsigned char* current_nametable = nametables[current_nametable_x][current_nametable_y];
 
+    // Return the tile index from the current nametable
+    return current_nametable[tile_x + (tile_y * NAMETABLE_WIDTH)];
+}
 
 // Checks the collision type at a specific (x, y) coordinate
 unsigned char check_collision(int x, int y) {
@@ -1643,77 +1658,29 @@ void flash_screen() {
 }
 
 
-//---------------------------------------------------------------------------------------//
-//                             SCROLL FUNCTIONS                                          //
-//---------------------------------------------------------------------------------------//
+//-----------------------------------------------------------------------------//
+//                       Nametable Transition Logic                            //
+//-----------------------------------------------------------------------------//
 
-/*
 
-// Function to load a nametable based on index and VRAM location
-void load_nametable(int index) {
-    if (index >= 0 && index < NUM_GAME_NAMETABLES) {
-        ppu_off();
-      	if (index % 2 == 0){
-        	vram_adr(NAMETABLE_A);
-        	vram_write(nametables[index], 1024);
-        }else{
-          	vram_adr(NAMETABLE_B);
-        	vram_write(nametables[index], 1024);
-        }
-        ppu_on_all();
-    }
-}
-
-void scroll_background() {
-    char pad = pad_poll(0);  // Get input from controller 0 (first player)
-    
-    // Scroll right: check if moving right and within the scroll limit
-    if ((pad & PAD_RIGHT) &&   (player_x >= SCREEN_WIDTH / 2)&&(scroll_x < NAMETABLE_SIZE * (NUM_GAME_NAMETABLES - 1))) {
-        scroll_x += PLAYER_SPEED / SUBPIXELS;
-        player_x = SCREEN_WIDTH / 2;  // Keep player centered after scrolling
-
-        // Load the next nametable if crossing into a new nametable
-        if (scroll_x >= NAMETABLE_SIZE * (current_nametable_load) && (current_nametable_load + 1 < NUM_GAME_NAMETABLES)) {
-            current_nametable_load++;  // Move to the next nametable
-            load_nametable(current_nametable_load);  // Load into NAMETABLE_B
-        }
-     
-     
+// Function to load a new nametable based on (x, y) coordinates
+void load_new_nametable(unsigned char new_x, unsigned char new_y) {
+    // Check if the target nametable exists
+    if (nametables[new_x][new_y] == NULL) {
+        return;  // No nametable to load, exit the function
     }
 
-    // Scroll left: check if moving left and within the scroll limit
-    if ((pad & PAD_LEFT) && (player_x <= SCREEN_WIDTH / 2) && (scroll_x > 0)) {
-        scroll_x -= PLAYER_SPEED / SUBPIXELS;
-        player_x = SCREEN_WIDTH / 2;  // Keep player centered after scrolling
-
-      	
-        // Load the previous nametable if crossing into a previous boundary
-        if (scroll_x < NAMETABLE_SIZE * current_nametable_load && current_nametable_load > 0) {
-            current_nametable_load--;  // Move to the previous nametable
-            load_nametable(current_nametable_load);  // Load into NAMETABLE_A
-        }
-    }
-
-
-    // Apply the scroll to the PPU
-    scroll(scroll_x, 0);  // Apply horizontal scroll
-}
-
-*/
-
-
-// Function to change the current nametable
-void load_new_nametable(unsigned char new_nametable_index) {
     // Fade out the screen
     fade_out();
     
-    // Update the current nametable index
-    current_nametable_index = new_nametable_index;
+    // Update the current nametable indices
+    current_nametable_x = new_x;
+    current_nametable_y = new_y;
 
     // Set VRAM address to start writing nametable
     ppu_off();
     vram_adr(NAMETABLE_A);
-    vram_write(nametables[current_nametable_index], 1024);
+    vram_write(nametables[current_nametable_x][current_nametable_y], 1024);
     ppu_on_all();
   
     load_hud();
@@ -1722,26 +1689,43 @@ void load_new_nametable(unsigned char new_nametable_index) {
     fade_in();
 }
 
-// Function to check for screen boundaries and load new nametable if needed
+// Function to check for screen boundaries and handle transitions
 void check_screen_transition() {
-    // Check if player is at screen boundaries (left or right)
+    // Horizontal transitions
     if (player_x <= 1) {
         // Move to the left nametable
-        if (current_nametable_index != 0) {
+        if (current_nametable_x > 0) {
             player_x = SCREEN_RIGHT_EDGE - 1;  // Reposition player on right side
-            load_new_nametable(current_nametable_index - 1);
-            
+            load_new_nametable(current_nametable_x - 1, current_nametable_y);
         } else {
             player_x = 1;  // Keep player within screen if no nametable on the left
         }
     } else if (player_x >= SCREEN_RIGHT_EDGE) {
         // Move to the right nametable
-        if (current_nametable_index < NUM_GAME_NAMETABLES - 1) {
+        if (current_nametable_x < 5) {
             player_x = 1;  // Reposition player on left side
-            load_new_nametable(current_nametable_index + 1);
-            
+            load_new_nametable(current_nametable_x + 1, current_nametable_y);
         } else {
             player_x = SCREEN_RIGHT_EDGE;  // Keep player within screen if no nametable on the right
+        }
+    }
+
+    // Vertical transitions
+    if (player_y <= 1) {
+        // Move to the upper nametable
+        if (current_nametable_y > 0) {
+            player_y = SCREEN_DOWN_EDGE - 1;  // Reposition player at bottom
+            load_new_nametable(current_nametable_x, current_nametable_y - 1);
+        } else {
+            player_y = 1;  // Keep player within screen if no nametable above
+        }
+    } else if (player_y >= SCREEN_DOWN_EDGE) {
+        // Move to the lower nametable
+        if (current_nametable_y < 1) {  // Adjust based on the number of vertical levels
+            player_y = 1;  // Reposition player at top
+            load_new_nametable(current_nametable_x, current_nametable_y + 1);
+        } else {
+            player_y = SCREEN_DOWN_EDGE;  // Keep player within screen if no nametable below
         }
     }
 }
@@ -1859,7 +1843,7 @@ void clear_dialogue_page() {
 void clear_dialogue_box() {
     ppu_off(); // Turn off rendering to safely update VRAM
     vram_adr(NAMETABLE_A);
-    vram_write(nametable_game_0, 1024);
+    vram_write(nametable_game_0_0, 1024);
     ppu_on_all();
 }
 
@@ -2022,9 +2006,8 @@ void setup_menu() {
 void setup_game() {
   ppu_off(); // Turn off rendering to safely update VRAM
   vram_adr(NAMETABLE_A);
-  vram_write(nametable_game_0, 1024);
-  vram_adr(NAMETABLE_B);
-  vram_write(nametable_game_1, 1024);
+  vram_write(nametable_game_0_0, 1024);
+
   ppu_on_all(); // Turn rendering back on
   
   music_play(0); // Play the gameplay music
@@ -2075,12 +2058,12 @@ void update_game() {
   draw_soul_animation(&oam_id);
   
   // Draw Elder Bug
-  if (current_nametable_index == 0) {  // Only draw if player is in nametable 1
+  if ((current_nametable_x == 0) && (current_nametable_y == 0)) {  // Only draw if player is in nametable 1
       animate_elder_bug(&oam_id);
   }
   
   // Update and draw Crawlid if in the correct nametable
-  if (current_nametable_index == 1) {
+  if ((current_nametable_x == 1) && (current_nametable_y == 0)) {
       update_crawlid_position();
       animate_crawlid(&oam_id);
       handle_player_crawlid_collision(player_x, player_y, crawlid_x, CRAWLID_Y);
