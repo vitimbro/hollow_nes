@@ -539,10 +539,10 @@ typedef struct {
 } Dialogue;
 
 Dialogue dialogues[] = {
-    {"HELLO!", 1},
-    {"HOW ARE YOU DOING?", 2},
-    {"DID YOU KNOW YOU COULD  HEAL BY PRESSING \x1d ?", 3},
-    {"YOU CAN ALSO ATTACK BY  PRESSING B.", -1}
+    {"OLA AMIGO!", 1},
+    {"TUDO BEM?", 2},
+    {"FOQUE SUA ALMA E SE CUREAPERTANDO \x1d !", 3},
+    {"USE SEU FERRAO PARA     ATACAR APERTANDO B.", -1}
 };
 
 // Global variables for dialogue
