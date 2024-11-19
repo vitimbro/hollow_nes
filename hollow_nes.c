@@ -85,7 +85,7 @@ extern char sfx_data[];
 
 // Player Position & Movement
 #define PLAYER_INIT_X 16                 // Initial X position in pixels
-#define PLAYER_INIT_Y 0                  // Initial Y position in pixels
+#define PLAYER_INIT_Y 2                  // Initial Y position in pixels
 #define PLAYER_ACCELERATION 4            // Acceleration in subpixels
 #define PLAYER_DECELERATION 3            // Deceleration when stopping
 #define PLAYER_SPEED 32                  // Max speed in subpixels
@@ -125,9 +125,6 @@ extern char sfx_data[];
 #define STATE_GAME  1
 #define STATE_DEATH 2
 
-// Background Scrolling Constants
-#define NES_MIRRORING 1
-#define SCROLL_SPEED (PLAYER_SPEED / SUBPIXELS)
 
 // Nametable Parameters
 #define NUM_GAME_NAMETABLES_X_0 5            // Total game nametables
@@ -173,14 +170,18 @@ extern char sfx_data[];
 #define TILE_MASK_EMPTY 0xb8
 
 // Define Elder Bug position in nametable 1
-#define ELDER_BUG_X 72  // Adjust for center positioning in nametable
-#define ELDER_BUG_Y 168   // Adjust for Y-axis positioning
+#define ELDERBUG_X 72  // Adjust for center positioning in nametable
+#define ELDERBUG_Y 168   // Adjust for Y-axis positioning
+#define ELDERBUG_WIDTH 16
+#define ELDERBUG_HEIGHT 24
 
 #define CRAWLID_Y 183
 #define CRAWLID_RUN_ANIM_FRAMES 2
 
 #define CRAWLID_HP 60
 #define DAMAGE_AMOUNT 20
+
+#define MAX_CRAWLIDS 2
 
 // Constants for Stun Duration
 #define STUN_DURATION 30  // Number of frames the Crawlid is stunned
@@ -283,8 +284,8 @@ const unsigned char collision_properties[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 3
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 4
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 5
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 0, 0, 0, // 6
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 0, 0, 0, // 7
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 6
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 7
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, // 8
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, // 9
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // a
@@ -490,14 +491,7 @@ int frames_since_last_state_change = 0;  // Frame counter
 unsigned char game_state = STATE_MENU; // Start with menu
 
 
-// Scrolling and nametable variables
-//unsigned int scroll_x = 0;
-//int current_nametable_load = 0; 
-//int current_nametable_player = 0;
-
-//-----------------------------------------------------------------------------//
-//                        Nametable References                                 //
-//-----------------------------------------------------------------------------//
+//------------------------- Nametable References --------------------------//
 
 // Two-dimensional array of nametables (organized by x, y)
 const unsigned char* nametables[6][2] = {
@@ -571,14 +565,6 @@ unsigned char mask_tile_3 = TILE_MASK_FULL;
 unsigned char elder_bug_anim_frame = 0;    // Animation frame index for Elder Bug
 unsigned char elder_bug_delay_counter = 0; // Frame delay for idle animation
 
-// Global Variables for Crawlid's Position and State
-unsigned char crawlid_x = 120;     // Starting x-position (center of screen)
-unsigned char crawlid_direction = 1;  // 1 for right, -1 for left
-unsigned char crawlid_anim_frame = 0;
-unsigned char crawlid_anim_delay_counter = 0;
-
-int crawlid_hp = CRAWLID_HP;
-CrawlidState crawlid_state = STATE_ALIVE;
 int stun_timer = 0;         // Timer for stun duration
 
 int strike_cooldown = 0;
@@ -589,6 +575,24 @@ unsigned char soul_frame = 0;        // Current frame of the soul animation
 bool soul_active = false;       // Whether the soul animation is active
 unsigned char soul_anim_counter = 0; // Counter for controlling the animation speed
 unsigned char soul_anim_delay_counter = 0;
+
+// Global Variables for Crawlid's Position and State
+typedef struct {
+    unsigned char x;                // X position
+    unsigned char direction;        // Movement direction: 1 for right, -1 for left
+    unsigned char anim_frame;       // Current animation frame
+    unsigned char anim_delay;       // Delay counter for animation
+    unsigned char hp;               // Hit points
+    CrawlidState state;             // Current state: ALIVE or DEAD
+    unsigned char nametable_x;      // Associated nametable X coordinate
+    unsigned char nametable_y;      // Associated nametable Y coordinate
+} Crawlid;
+
+Crawlid crawlids[MAX_CRAWLIDS] = {
+    {120, 1, 0, 0, CRAWLID_HP, STATE_ALIVE, 1, 0},  // Crawlid 1
+    {120, 1, 0, 0, CRAWLID_HP, STATE_ALIVE, 5, 1} // Crawlid 2
+    // Add more crawlids as needed
+};
 
 
 //------------------------------------------------------------------------------------//
@@ -699,21 +703,23 @@ void update_hud();
 void load_new_nametable(unsigned char new_x, unsigned char new_y);
 void check_screen_transition();
 
-void update_crawlid_position();
-void animate_crawlid(unsigned char* oam_id);
+void update_crawlids_position();
+void animate_crawlids(unsigned char* oam_id);
 
 bool check_sprite_collision(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2);
-void handle_player_crawlid_collision(int player_x, int player_y, int crawlid_x, int crawlid_y);
+void handle_player_crawlid_collisions(int player_x, int player_y);
 
 void take_damage();
 void handle_death();
 
 
 void handle_player_strike();
-void handle_crawlid_damage(int* crawlid_hp, CrawlidState* crawlid_state);
-void handle_strike_crawlid_collision(int strike_x, int strike_y, int crawlid_x, int crawlid_y, int* crawlid_hp, CrawlidState* crawlid_state);
+void handle_crawlid_damage(Crawlid* c);
+void handle_strike_crawlid_collisions(int strike_x, int strike_y);
 
 void draw_soul_animation(unsigned char* oam_id);
+
+void handle_player_elderbug_collision(int player_x, int player_y);
 
 //---------------------------------------------------------------------------------------//
 //                            SETUP AND INITIALIZATION                                   //
@@ -742,6 +748,8 @@ void setup_audio() {
 // Initialize the player with starting position, speed, and state
 // Sets the player to the idle state, facing right.
 void initialize_player() {
+    unsigned char i = 0;
+    
     player_x = PLAYER_INIT_X;        // Set initial x-position in pixels
     player_y = PLAYER_INIT_Y;        // Set initial y-position in pixels
     
@@ -759,8 +767,16 @@ void initialize_player() {
   
     current_nametable_x = 0;
     current_nametable_y = 0;
-    crawlid_hp = CRAWLID_HP;
   
+    
+    // crawlid_hp = CRAWLID_HP;
+    
+    for (i = 0; i < MAX_CRAWLIDS; i++) {
+        Crawlid* c = &crawlids[i];
+        
+        c->hp = CRAWLID_HP;
+        c->state = STATE_ALIVE;
+    }
 }
 
 
@@ -908,11 +924,7 @@ void attempt_heal() {
 
 // Function to move the player to the left
 void move_player_left() {
-//      // Check if the player is already at the leftmost boundary
-//    if (player_x <= SCREEN_LEFT_EDGE) {
-//        player_x_vel_sub = 0;  // Stop further leftward movement
-//        return;  // Exit function early if at the boundary
-//    }
+
     // Increase negative velocity (moving left) if it doesn't exceed the max speed
     if (player_x_vel_sub > -PLAYER_SPEED) {
         player_x_vel_sub -= PLAYER_ACCELERATION;  // Accelerate left by subtracting subpixels
@@ -928,10 +940,7 @@ void move_player_left() {
 
 // Function to move the player to the right
 void move_player_right() {
-//  if (player_x >= SCREEN_RIGHT_EDGE) {
-//        player_x_vel_sub = 0;  // Stop further leftward movement
-//        return;  // Exit function early if at the boundary
-//    }
+
     // Increase positive velocity (moving right) if it doesn't exceed the max speed
     if (player_x_vel_sub < PLAYER_SPEED) {
         player_x_vel_sub += PLAYER_ACCELERATION;  // Accelerate right by adding subpixels
@@ -1070,11 +1079,7 @@ bool handle_collision(unsigned char collision_type) {
     if (collision_type == COLLISION_INTERACTIVE) {
         can_interact = true;
         // Display the up arrow sprite above the player
-        oam_spr(player_x, player_y + ARROW_Y_OFFSET, ARROW_TILE, 0, 0); // Position and display the arrow
-    }
-    
-    if (check_collision(player_x, player_y) != COLLISION_INTERACTIVE) {
-        can_interact = false;
+        
     }
   
     return false;
@@ -1242,27 +1247,50 @@ bool check_sprite_collision(int x1, int y1, int width1, int height1, int x2, int
 
 
 // Updated Crawlid collision to use take_damage function
-void handle_player_crawlid_collision(int player_x, int player_y, int crawlid_x, int crawlid_y) {
-    // Set player and Crawlid dimensions (16x16 for player, 16x8 for Crawlid)
-  
-    if (crawlid_state == STATE_DEAD) return;  // Skip animation if Crawlid is dead 
-  
-    if (check_sprite_collision(player_x, player_y, 16, 16, crawlid_x, crawlid_y, 16, 8)) {
-        take_damage();  // Call the general damage function
+void handle_player_crawlid_collisions(int player_x, int player_y) {
+    unsigned char i;
+    for (i = 0; i < MAX_CRAWLIDS; i++) {
+        Crawlid* c = &crawlids[i];
+
+        // Skip if not in the current nametable
+        if (c->nametable_x != current_nametable_x || c->nametable_y != current_nametable_y) continue;
+
+        if (c->state == STATE_DEAD) continue;
+
+        if (check_sprite_collision(player_x, player_y, 16, 16, c->x, CRAWLID_Y, 16, 8)) {
+            take_damage();  // Call the general damage function
+        }
     }
 }
 
 // Check for collision between player's strike and Crawlid
-void handle_strike_crawlid_collision(int strike_x, int strike_y, int crawlid_x, int crawlid_y, int* crawlid_hp, CrawlidState* crawlid_state) {
-    if (*crawlid_state != STATE_DEAD && strike_cooldown == 0) {  // Only check if Crawlid is alive and no cooldown
-        // Set dimensions for the strike (8x8 or as appropriate for your game)
-        if (check_sprite_collision(strike_x, strike_y, 8, 8, crawlid_x, crawlid_y, 16, 8)) {
+void handle_strike_crawlid_collisions(int strike_x, int strike_y) {
+    unsigned char i = 0;
+    for (i = 0; i < MAX_CRAWLIDS; i++) {
+        Crawlid* c = &crawlids[i];
+
+        if (c->state == STATE_DEAD || strike_cooldown > 0) continue;
+
+        if (check_sprite_collision(strike_x, strike_y, 16, 16, c->x, CRAWLID_Y, 16, 8)) {
             handle_player_strike();  // Player gains soul upon hitting
-            handle_crawlid_damage(crawlid_hp, crawlid_state);  // Crawlid takes damage
-            strike_cooldown = STRIKE_COOLDOWN_DURATION;  // Start cooldown to prevent immediate re-hit
+            handle_crawlid_damage(c);  // Crawlid takes damage
+            strike_cooldown = STRIKE_COOLDOWN_DURATION;
         }
     }
 }
+
+void handle_player_elderbug_collision(int player_x, int player_y) {
+    // Check if the player and Elder Bug collide
+    if (check_sprite_collision(player_x, player_y, 16, 16, ELDERBUG_X, ELDERBUG_Y, ELDERBUG_WIDTH, ELDERBUG_HEIGHT)) {
+        can_interact = true;  // Enable interaction
+        
+
+    } else {
+        can_interact = false;  // Disable interaction if not colliding
+    }
+}
+
+
 
 //-----------------------------------------------------------------------------//
 //                        Handle damage and death                              //
@@ -1304,19 +1332,22 @@ void handle_player_strike() {
 }
 
 // Handle Crawlid's HP reduction and death
-void handle_crawlid_damage(int* crawlid_hp, CrawlidState* crawlid_state) {
-    *crawlid_hp -= DAMAGE_AMOUNT;  // Reduce Crawlid's HP by damage amount
-    stun_timer = STUN_DURATION;    // Set the stun timer
+void handle_crawlid_damage(Crawlid* c) {
+    if (c->state == STATE_DEAD) return;  // Skip if Crawlid is already dead
 
-    if (*crawlid_hp <= 0) {
-        *crawlid_state = STATE_DEAD;  // Mark Crawlid as dead
-        // Additional logic, such as removing the sprite or playing a death animation, can go here.
+    c->hp -= DAMAGE_AMOUNT;  // Reduce Crawlid's HP by the damage amount
+    stun_timer = STUN_DURATION;  // Apply a stun duration (global for simplicity, or make it per Crawlid)
+
+    // Check if the Crawlid's HP has reached zero
+    if (c->hp <= 0) {
+        c->state = STATE_DEAD;  // Mark the Crawlid as dead
         
         // Trigger soul animation above the Crawlid's position
-        soul_x = crawlid_x;
-        soul_y = CRAWLID_Y - 12;  // Adjust Y position to appear above
-        soul_frame = 0;           // Start with the first frame
-        soul_active = true;          // Activate soul animation
+        soul_x = c->x;
+        soul_y = CRAWLID_Y - 12;  // Adjust Y position to appear above the Crawlid
+        soul_active = true;       // Activate soul animation
+
+        // Additional death logic (e.g., remove sprite, play sound) can go here
     }
 }
 
@@ -1343,6 +1374,11 @@ void draw_soul_animation(unsigned char* oam_id) {
         }
         
         soul_anim_counter++; // Increment the life counter for tracking duration
+    }
+    else {
+        soul_frame = 0;           // Start with the first frame
+        soul_anim_delay_counter = 0;
+        soul_anim_counter = 0;
     }
 }
 
@@ -1559,7 +1595,7 @@ void draw_strike(unsigned char* oam_id) {
     }
   
     // Check for collision with Crawlid after strike is drawn
-    handle_strike_crawlid_collision(strike_x, strike_y, crawlid_x, CRAWLID_Y, &crawlid_hp, &crawlid_state);
+    handle_strike_crawlid_collisions(strike_x, strike_y);
 }
 
 //---------------------------------------------------------------------------------------//
@@ -1573,50 +1609,64 @@ void animate_elder_bug(unsigned char* oam_id) {
     elder_bug_delay_counter = (elder_bug_delay_counter + 1) % ANIM_DELAY_IDLE;
 
     // Draw the current Elder Bug frame in a fixed position
-    *oam_id = oam_meta_spr(ELDER_BUG_X, ELDER_BUG_Y, *oam_id, elderbug_idle_seq[elder_bug_anim_frame]);
+    *oam_id = oam_meta_spr(ELDERBUG_X, ELDERBUG_Y, *oam_id, elderbug_idle_seq[elder_bug_anim_frame]);
 }
 
 
 // Function to update Crawlid's position across the screen
-void update_crawlid_position() {
-    
-    if (stun_timer > 0) {
-        stun_timer--;  // Decrease stun timer each frame
-        return;        // Skip movement if stunned
-    }
-  
-    // Move Crawlid in the current direction
-    crawlid_x += crawlid_direction;
+void update_crawlids_position() {
+    unsigned char i;
+    for (i = 0; i < MAX_CRAWLIDS; i++) {
+        Crawlid* c = &crawlids[i];
 
-    // Check for screen boundaries and reverse direction if needed
-    if (crawlid_x <= SCREEN_LEFT_EDGE) {
-        crawlid_direction = 1;  // Move right
-    } else if (crawlid_x >= SCREEN_RIGHT_EDGE) {
-        crawlid_direction = -1; // Move left
+        // Skip if not in the current nametable
+        if (c->nametable_x != current_nametable_x || c->nametable_y != current_nametable_y) continue;
+
+        if (c->state == STATE_DEAD) continue;  // Skip dead Crawlids
+
+        // Skip movement if stunned
+        if (stun_timer > 0) {
+            stun_timer--;
+            continue;
+        }
+
+        c->x += c->direction;
+
+        // Check for screen boundaries and reverse direction
+        if (c->x <= SCREEN_LEFT_EDGE) {
+            c->direction = 1;  // Move right
+        } else if (c->x >= SCREEN_RIGHT_EDGE) {
+            c->direction = -1; // Move left
+        }
     }
 }
 
 // Function to handle Crawlid's animation and display
-void animate_crawlid(unsigned char* oam_id) {
-  
+void animate_crawlids(unsigned char* oam_id) {
+    unsigned char i;
     const unsigned char* const* crawlid_seq;
-  
-    if (crawlid_state == STATE_DEAD) return;  // Skip animation if Crawlid is dead  
-  
-    // Only animate if not stunned
-    if (stun_timer == 0) {
-        // Animation frame update
-        if (crawlid_anim_delay_counter == 0) {
-            crawlid_anim_frame = (crawlid_anim_frame + 1) % CRAWLID_RUN_ANIM_FRAMES;
+
+    for (i = 0; i < MAX_CRAWLIDS; i++) {
+        Crawlid* c = &crawlids[i];
+
+        // Skip if not in the current nametable
+        if (c->nametable_x != current_nametable_x || c->nametable_y != current_nametable_y) continue;
+
+        if (c->state == STATE_DEAD) continue;  // Skip dead Crawlids
+
+        crawlid_seq = (c->direction == 1) ? crawlid_R_run_seq : crawlid_L_run_seq;
+
+        // Only animate if not stunned
+        if (stun_timer == 0) {
+            if (c->anim_delay == 0) {
+                c->anim_frame = (c->anim_frame + 1) % CRAWLID_RUN_ANIM_FRAMES;
+            }
+            c->anim_delay = (c->anim_delay + 1) % 15;
         }
-        crawlid_anim_delay_counter = (crawlid_anim_delay_counter + 1) % 15;
+
+        *oam_id = oam_meta_spr(c->x, CRAWLID_Y, *oam_id, crawlid_seq[c->anim_frame]);
     }
-
-    // Draw Crawlid's current frame based on direction
-    crawlid_seq = (crawlid_direction == 1) ? crawlid_R_run_seq : crawlid_L_run_seq;
-    *oam_id = oam_meta_spr(crawlid_x, CRAWLID_Y, *oam_id, crawlid_seq[crawlid_anim_frame]);
 }
-
 
 
 //-----------------------------------------------------------------------------//
@@ -1711,18 +1761,19 @@ void check_screen_transition() {
     }
 
     // Vertical transitions
-    if (player_y <= 1) {
+    if (player_y <= 3) {
         // Move to the upper nametable
         if (current_nametable_y > 0) {
-            player_y = SCREEN_DOWN_EDGE - 1;  // Reposition player at bottom
+            player_y = SCREEN_DOWN_EDGE - 10;  // Reposition player at bottom
             load_new_nametable(current_nametable_x, current_nametable_y - 1);
+            player_y_vel_sub = JUMP_SPEED;
         } else {
             player_y = 1;  // Keep player within screen if no nametable above
         }
     } else if (player_y >= SCREEN_DOWN_EDGE) {
         // Move to the lower nametable
         if (current_nametable_y < 1) {  // Adjust based on the number of vertical levels
-            player_y = 1;  // Reposition player at top
+            player_y = 4;  // Reposition player at top
             load_new_nametable(current_nametable_x, current_nametable_y + 1);
         } else {
             player_y = SCREEN_DOWN_EDGE;  // Keep player within screen if no nametable below
@@ -1959,7 +2010,7 @@ void update_lives_indicator() {
     mask_tile_2 = player_lives >= 2 ? TILE_MASK_FULL : TILE_MASK_EMPTY;
     mask_tile_3 = player_lives >= 3 ? TILE_MASK_FULL : TILE_MASK_EMPTY;
 
-    if (player_lives != previous_lives) {
+    if (player_lives != previous_lives && player_lives != 0) {
         previous_lives = player_lives;  // Update previous value
       
         ppu_off();
@@ -2060,14 +2111,13 @@ void update_game() {
   // Draw Elder Bug
   if ((current_nametable_x == 0) && (current_nametable_y == 0)) {  // Only draw if player is in nametable 1
       animate_elder_bug(&oam_id);
+      handle_player_elderbug_collision(player_x, player_y);
   }
   
   // Update and draw Crawlid if in the correct nametable
-  if ((current_nametable_x == 1) && (current_nametable_y == 0)) {
-      update_crawlid_position();
-      animate_crawlid(&oam_id);
-      handle_player_crawlid_collision(player_x, player_y, crawlid_x, CRAWLID_Y);
-  }
+  update_crawlids_position();
+  animate_crawlids(&oam_id);
+  handle_player_crawlid_collisions(player_x, player_y);
   
   update_hud();
   
