@@ -105,6 +105,7 @@ extern char sfx_data[];
 #define ANIM_DELAY_FALL 1
 #define ANIM_DELAY_ATTACK 6
 #define ANIM_DELAY_HEAL 14
+#define ANIM_DELAY_SIT 1
 
 // Animation Frame Counts
 #define IDLE_ANIM_FRAMES 2               // Frames in idle animation
@@ -113,6 +114,7 @@ extern char sfx_data[];
 #define FALL_ANIM_FRAMES 1 
 #define ATTACK_ANIM_FRAMES 5
 #define HEAL_ANIM_FRAMES 6
+#define SIT_ANIM_FRAMES 1
 
 // Gameplay and Timing Constants
 #define STATE_CHANGE_DELAY 10            // Minimum frames between state changes
@@ -141,7 +143,7 @@ extern char sfx_data[];
 #define COLLISION_NONE 0
 #define COLLISION_SOLID 1
 #define COLLISION_SPIKE 2
-#define COLLISION_INTERACTIVE 3
+#define COLLISION_BENCH 3
 
 #define DAMAGE_COOLDOWN 90 // Set cooldown time (frames) between spike damage
 
@@ -286,8 +288,8 @@ const unsigned char collision_properties[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 5
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 6
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 7
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, // 8
-    0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, // 9
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, // 8
+    0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, // 9
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // a
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // b
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // c
@@ -325,6 +327,8 @@ DEF_METASPRITE_2x2(player_R_heal_1, 0x14a, 2);      // Healing Right
 DEF_METASPRITE_2x2(player_R_heal_2, 0x15a, 2);
 DEF_METASPRITE_2x2(player_R_heal_3, 0x16a, 2);
 
+DEF_METASPRITE_2x2(player_R_sit, 0x185, 2);      // Sitting Right 
+
 
 //------------------------------- FACING LEFT ------------------------------------//
 
@@ -348,6 +352,7 @@ DEF_METASPRITE_2x2_H_FLIP(player_L_heal_1, 0x14a, 2);   // Healing Left
 DEF_METASPRITE_2x2_H_FLIP(player_L_heal_2, 0x15a, 2);
 DEF_METASPRITE_2x2_H_FLIP(player_L_heal_3, 0x16a, 2);
 
+DEF_METASPRITE_2x2_H_FLIP(player_L_sit, 0x185, 2);   // Sitting Left
 
 //------------------------------- FACING UP --------------------------------------//
 
@@ -408,6 +413,10 @@ const unsigned char* const player_D_attack_seq[ATTACK_ANIM_FRAMES] = { player_R_
 const unsigned char* const player_L_heal_seq[HEAL_ANIM_FRAMES] = { player_L_heal_1, player_L_heal_2, player_L_heal_1, player_L_heal_2, player_L_heal_3, player_L_heal_3 };
 const unsigned char* const player_R_heal_seq[HEAL_ANIM_FRAMES] = { player_R_heal_1, player_R_heal_2, player_R_heal_1, player_R_heal_2, player_R_heal_3, player_R_heal_3 };
 
+// Sit sequences
+const unsigned char* const player_L_sit_seq[SIT_ANIM_FRAMES] = { player_L_sit };
+const unsigned char* const player_R_sit_seq[SIT_ANIM_FRAMES] = { player_R_sit };
+
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 // Elder bug Idle sequence
@@ -431,7 +440,8 @@ typedef enum {
     STATE_FALL,     // Player is falling
     STATE_ATTACK,    // Player is attacking
     STATE_HEAL,       // Player is healing
-    STATE_DIALOGUE   // Player is in a dialogue
+    STATE_DIALOGUE,   // Player is in a dialogue
+    STATE_SIT
 } PlayerState;
 
 // CRAWLID STATE CONSTANTS
@@ -489,6 +499,11 @@ int frames_since_last_state_change = 0;  // Frame counter
 
 // Game state variable
 unsigned char game_state = STATE_MENU; // Start with menu
+
+bool can_sit = false;
+bool can_talk = false;
+
+bool is_sitting = false;
 
 
 //------------------------- Nametable References --------------------------//
@@ -653,6 +668,7 @@ void set_jumping_state();
 void set_falling_state();
 void set_attacking_state();
 void set_healing_state();
+void set_sitting_state();
 
 // Animation sequence and frame handling
 void animate_player(unsigned char* oam_id, unsigned char* anim_frame);
@@ -720,6 +736,8 @@ void handle_strike_crawlid_collisions(int strike_x, int strike_y);
 void draw_soul_animation(unsigned char* oam_id);
 
 void handle_player_elderbug_collision(int player_x, int player_y);
+
+void handle_sitting();
 
 //---------------------------------------------------------------------------------------//
 //                            SETUP AND INITIALIZATION                                   //
@@ -813,6 +831,16 @@ void handle_player_input() {
       handle_dialogue_input(pad);
       return;
     }
+    if (is_sitting) {
+        // Stand up if 'A' is pressed
+        if (pad & PAD_A) {
+            is_sitting = false;
+            set_idle_state();  // Transition back to idle
+            delay(20);
+            return;
+        }
+        return;  // Skip other input if sitting
+    }
       
     handle_horizontal_movement_input(pad); // Use current poll state for movement
     handle_jump_input(pad);                // Use current poll state for jump
@@ -891,9 +919,19 @@ void handle_heal_input(char pad) {
 void handle_interact_input(char pad) {
     // Check if the Up button is pressed and player is idle
     if (pad & PAD_UP && player_state == STATE_IDLE && can_interact) {
-        player_state = STATE_DIALOGUE;
-        is_dialogue_active = true;
-        handle_dialogue();  // Open the dialogue box
+      
+        if (can_talk){
+          player_state = STATE_DIALOGUE;
+          is_dialogue_active = true;
+          handle_dialogue();  // Open the dialogue box
+        }
+      
+        if (can_sit){
+           player_state = STATE_SIT;
+           is_sitting = true;
+           handle_sitting();
+        }
+     
     }
 }
 
@@ -1067,21 +1105,29 @@ void handle_player_movement() {
 
 // Main collision handling function
 bool handle_collision(unsigned char collision_type) {
+  
+    if (collision_type == COLLISION_NONE) {
+
+        return true;
+    } 
     if (collision_type == COLLISION_SOLID) {
         // Solid object - stop movement
+
         return true;
     } 
     
     if (collision_type == COLLISION_SPIKE) {
         handle_spike_collision();
     } 
-    
-    if (collision_type == COLLISION_INTERACTIVE) {
-        can_interact = true;
-        // Display the up arrow sprite above the player
-        
-    }
   
+    if (collision_type == COLLISION_BENCH) {
+        can_interact = true;   // Display the up arrow sprite above the player
+        can_sit = true;   
+    } else {
+        can_interact = false;   // Display the up arrow sprite above the player
+        can_sit = false;  
+    } 
+
     return false;
 }
 
@@ -1283,10 +1329,11 @@ void handle_player_elderbug_collision(int player_x, int player_y) {
     // Check if the player and Elder Bug collide
     if (check_sprite_collision(player_x, player_y, 16, 16, ELDERBUG_X, ELDERBUG_Y, ELDERBUG_WIDTH, ELDERBUG_HEIGHT)) {
         can_interact = true;  // Enable interaction
-        
+        can_talk = true;
 
     } else {
         can_interact = false;  // Disable interaction if not colliding
+        can_talk = false;
     }
 }
 
@@ -1442,6 +1489,12 @@ void update_player_animation_state() {
         set_healing_state();
         frames_since_last_state_change = 0;  // Reset frames counter for the next state
     }
+  
+    // Check if player is sitting
+    if (is_sitting) {
+        set_sitting_state();
+        frames_since_last_state_change = 0;  // Reset frames counter for the next state
+    }
    
   
 }
@@ -1484,7 +1537,11 @@ void set_healing_state(){
     current_anim_frame_count = HEAL_ANIM_FRAMES;
 }
 
-
+void set_sitting_state(){
+    player_state = STATE_SIT;
+    current_anim_delay = ANIM_DELAY_SIT;
+    current_anim_frame_count = SIT_ANIM_FRAMES;  
+}
 
 //------------------------------------------------------------------------------------------//
 //                                 PLAYER ANIMATION FUNCTIONS                               //
@@ -1508,7 +1565,7 @@ void animate_player(unsigned char* oam_id, unsigned char* anim_frame) {
         is_attacking = false;  // Stop attacking after the animation finishes
     }
   
-    // End the attack after all animation frames have displayed
+    // End the healing after all animation frames have displayed
     if (is_healing && *anim_frame == HEAL_ANIM_FRAMES - 1) {
         is_healing = false;  // Stop attacking after the animation finishes
     }
@@ -1540,6 +1597,9 @@ const unsigned char* const* get_animation_sequence() {
     }
     else if (player_state == STATE_HEAL) {
         return player_facing_right ? player_R_heal_seq : player_L_heal_seq;  // Healing right or left
+    }
+    else if (player_state == STATE_SIT) {
+        return player_facing_right ? player_R_sit_seq : player_L_sit_seq;  // Healing right or left
     }
     return current_seq;  // Default to current sequence if state is unknown
 }
@@ -2033,6 +2093,13 @@ void update_hud() {
 }
 
 
+//---------------------------------------------------------------//
+
+void handle_sitting() {
+    player_y -= 10;
+    player_state = STATE_SIT;
+    player_lives = MAX_LIVES;  
+}
 
 //---------------------------------------------------------------------------------------//
 //                             GAME STATE FUNCTIONS                                      //
