@@ -118,7 +118,7 @@ extern char sfx_data[];
 #define STATE_CHANGE_DELAY 10            // Minimum frames between state changes
 #define MAX_JUMP_HOLD_TIME 40            // Max frames for holding jump
 #define ATTACK_COOLDOWN 36               // Cooldown frames after attack
-#define FADE_TIME 6                      // Fade in/out duration in frames
+#define FADE_TIME 4                      // Fade in/out duration in frames
 
 // Game State Definitions
 #define STATE_MENU  0
@@ -2180,9 +2180,6 @@ void main(void) {
     check_game_state(); // Check and update based on the game state
     ppu_wait_nmi();     // Wait for the next NMI (synchronizing game logic with V-blank)
     nmi_set_callback(famitone_update);
-    if (fade_done == 1){
-    // scroll_background();
-    }
     
   }
 }
