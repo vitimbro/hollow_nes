@@ -145,6 +145,11 @@ extern char sfx_data[];
 #define COLLISION_SPIKE 2
 #define COLLISION_BENCH 3
 
+#define COLLISION_BIT_SOLID  (1 << COLLISION_SOLID)
+#define COLLISION_BIT_SPIKE  (1 << COLLISION_SPIKE)
+#define COLLISION_BIT_BENCH  (1 << COLLISION_BENCH)
+
+
 #define DAMAGE_COOLDOWN 90 // Set cooldown time (frames) between spike damage
 
 
@@ -280,7 +285,7 @@ const unsigned char collision_properties[256] = {
   // 0 = none, 1 = solid, 2 = spike, 3 = dialogue, 4 = bench
   
  // 0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0
+    0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 1
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 2
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 3
@@ -610,6 +615,11 @@ Crawlid crawlids[MAX_CRAWLIDS] = {
 };
 
 
+bool collided_horizontally = false;
+bool collided_vertically = false;
+
+
+
 //------------------------------------------------------------------------------------//
 //                              FUNCTION PROTOTYPES                                   //
 //------------------------------------------------------------------------------------//
@@ -622,10 +632,10 @@ void initialize_player();
 // Tile and collision detection
 unsigned char get_tile_at(unsigned char x, unsigned char y);
 unsigned char check_collision(int x, int y);
-bool handle_collision(unsigned char collision_type);
-bool check_player_horizontal_collision(int new_x, int player_y);
-bool check_player_vertical_collision(int new_x, int player_y);
-void handle_spike_collision();
+void handle_collisions_from_mask(unsigned char collision_mask);
+unsigned char check_player_horizontal_collision(int* new_x, int player_y);
+unsigned char check_player_vertical_collision(int player_x, int* new_y);
+void update_player_collisions(int* new_x, int* new_y);
 
 
 // Player update and input handling
@@ -706,7 +716,6 @@ void handle_dialogue_input(char pad);
 void update_dialogue_cooldown();
 
 
-void reset_player_position();
 
 void update_interaction_indicator(unsigned char* oam_id);
 
@@ -1022,28 +1031,31 @@ void apply_player_physics() {
 
 // Gravity application logic
 void apply_gravity() {
-    // Check if the jump button is released or the hold time is over
-    if (jump_hold_timer == 0) {
-        // Apply increased gravity when falling
-        player_y_vel_sub += FALL_GRAVITY;
-    } else {
-        // Apply normal gravity when holding jump
-        player_y_vel_sub += GRAVITY;
-    }
+  if (!collided_vertically) {
+      // Check if the jump button is released or the hold time is over
+      if (jump_hold_timer == 0) {
+          // Apply increased gravity when falling
+          player_y_vel_sub += FALL_GRAVITY;
+      } else {
+          // Apply normal gravity when holding jump
+          player_y_vel_sub += GRAVITY;
+      }
 
-    // Cap the fall speed
-    if (player_y_vel_sub > MAX_FALL_SPEED) {
-        player_y_vel_sub = MAX_FALL_SPEED;
-    }
+      // Cap the fall speed
+      if (player_y_vel_sub > MAX_FALL_SPEED) {
+          player_y_vel_sub = MAX_FALL_SPEED;
+      }
+  }
 }
 
 void update_jump_timer() {
     if (jump_timer > 0) {
         jump_timer--;
+    }
         if (jump_timer == 0) {
             can_jump = true;  // Allow jumping once cooldown has expired
         }
-    }
+    
 }
 
 //-----------------------------------------------------------------//
@@ -1077,114 +1089,13 @@ void handle_player_movement() {
     int new_x = player_x;
     int new_y = player_y;
 
-    // Booleans to check if the player collides horizontally or vertically
-    bool collided_horizontally;
-    bool collided_vertically;
-
     // Handle subpixel movement for both X and Y axes
     new_x += handle_subpixel_movement(&player_x_sub, player_x_vel_sub);
     new_y += handle_subpixel_movement(&player_y_sub, player_y_vel_sub);
-
-    // Check for collisions horizontally and vertically before updating the player's position
-    collided_horizontally = handle_horizontal_collision(&new_x);
-    collided_vertically = handle_vertical_collision(&new_y);
-
-    // Only update the player's pixel position if there is no collision
-    if (!collided_horizontally) {
-        player_x = new_x;  // Update X position if no horizontal collision
-    }
-    if (!collided_vertically) {
-        player_y = new_y;  // Update Y position if no vertical collision
-    }
-}
-
-//---------------------------------------------------------------------------------//
-//                        Handle Player Collision                                  //
-//---------------------------------------------------------------------------------//
-
-
-// Main collision handling function
-bool handle_collision(unsigned char collision_type) {
-  
-    if (collision_type == COLLISION_NONE) {
-
-        return true;
-    } 
-    if (collision_type == COLLISION_SOLID) {
-        // Solid object - stop movement
-
-        return true;
-    } 
     
-    if (collision_type == COLLISION_SPIKE) {
-        handle_spike_collision();
-    } 
-  
-    if (collision_type == COLLISION_BENCH) {
-        can_interact = true;   // Display the up arrow sprite above the player
-        can_sit = true;   
-    } else {
-        can_interact = false;   // Display the up arrow sprite above the player
-        can_sit = false;  
-    } 
-
-    return false;
-}
-
-// Handle spike collision
-void handle_spike_collision() {
-    take_damage();  // Call the general damage function
-}
-
-
-bool handle_horizontal_collision(int* new_x) {
-    if (check_player_horizontal_collision(*new_x, player_y)) {
-        // Ajusta a posição com base na direção do movimento
-      
-        if (player_x_vel_sub > 0) {
-            player_x = ALIGN_TO_TILE(*new_x);  // Ajuste fino para colisão na direita
-        } else {
-            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE;  // Ajuste fino para colisão na esquerda
-        }
-      
-        player_x_vel_sub = 0;  // Para o movimento horizontal
-        return true;    // Colisão ocorreu
-    }
-    return false;  // Sem colisão
-}
-
-
-bool handle_vertical_collision(int* new_y) {
-    if (check_player_vertical_collision(player_x, *new_y)) {
-        if (player_y_vel_sub >= 0) {  
-            player_y = ALIGN_TO_TILE(*new_y);  
-            is_on_ground = true;
-
-            // Set cooldown only when landing for the first time
-            if (!has_landed) {
-                jump_timer = JUMP_COOLDOWN;
-                can_jump = false;  // Prevent jumping immediately
-                has_landed = true; // Mark as landed
-            }
-        } else {  
-            player_y = ALIGN_TO_TILE(*new_y) + TILE_SIZE;  
-        }
-        player_y_vel_sub = 0;  
-        return true;
-    }
-
-    // Player is in the air, reset landing flag
-    if (player_y_vel_sub != 0) {
-        is_on_ground = false;
-        has_landed = false;  // Reset landing flag when airborne
-    }
-
-    return false;
-}
-
-// Reset player position function for reuse in multiple conditions
-void reset_player_position() {
-   // to-do (or not)
+    // Update collisions and handle movement accordingly
+    update_player_collisions(&new_x, &new_y);
+    
 }
 
 
@@ -1218,70 +1129,167 @@ unsigned char check_collision(int x, int y) {
 
 
 // Check if the player's bounding box collides with different types of tiles
-bool check_player_horizontal_collision(int new_x, int player_y) {
-    bool is_solid_collision = false;
+unsigned char check_player_horizontal_collision(int *new_x, int player_y) {
+    unsigned char collision_mask = 0;
+
+    // Check all corners for horizontal collision
+    unsigned char collision_type = check_collision(*new_x + 6, player_y + 4);
+    if (collision_type != COLLISION_NONE) {
+        collision_mask |= (1 << collision_type);
+    }
+
+    collision_type = check_collision(*new_x + 10, player_y + 4);
+    if (collision_type != COLLISION_NONE) {
+        collision_mask |= (1 << collision_type);
+    }
+
+    collision_type = check_collision(*new_x + 6, player_y + 15);
+    if (collision_type != COLLISION_NONE) {
+        collision_mask |= (1 << collision_type);
+    }
+
+    collision_type = check_collision(*new_x + 10, player_y + 15);
+    if (collision_type != COLLISION_NONE) {
+        collision_mask |= (1 << collision_type);
+    }
     
-    // Check all relevant corners for horizontal collision
-    unsigned char collision_type = check_collision(new_x + 6, player_y + 4);
-    if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
+    if (collision_mask & COLLISION_BIT_SOLID){
+      collided_horizontally = true;
+    } else {
+      collided_horizontally = false;
     }
-
-    // Additional corners
-    collision_type = check_collision(new_x + 10, player_y + 4);
-    if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
-    }
-
-    collision_type = check_collision(new_x + 6, player_y + 15);
-    if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
-    }
-
-    collision_type = check_collision(new_x + 10, player_y + 15);
-    if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
-    }
-
-    return is_solid_collision;
+    
+    return collision_mask;
 }
 
 
 
-bool check_player_vertical_collision(int player_x, int new_y) {
-    bool is_solid_collision = false;
+unsigned char check_player_vertical_collision(int player_x, int* new_y) {
+    unsigned char collision_mask = 0;
 
-    // Check all relevant corners for vertical collision
-    unsigned char collision_type = check_collision(player_x + 6, new_y + 4);
+    // Check all corners for vertical collision
+    unsigned char collision_type = check_collision(player_x + 6, *new_y + 4);
     if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
+        collision_mask |= (1 << collision_type);
     }
 
-    collision_type = check_collision(player_x + 8, new_y + 4);
+    collision_type = check_collision(player_x + 8, *new_y + 4);
     if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
+        collision_mask |= (1 << collision_type);
     }
 
-    collision_type = check_collision(player_x + 6, new_y + 16);
+    collision_type = check_collision(player_x + 6, *new_y + 16);
     if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
+        collision_mask |= (1 << collision_type);
     }
 
-    collision_type = check_collision(player_x + 8, new_y + 16);
+    collision_type = check_collision(player_x + 8, *new_y + 16);
     if (collision_type != COLLISION_NONE) {
-        handle_collision(collision_type);
-        if (collision_type == COLLISION_SOLID) is_solid_collision = true;
+        collision_mask |= (1 << collision_type);
     }
-
-    return is_solid_collision;
+    
+    if (collision_mask & COLLISION_BIT_SOLID){
+      collided_vertically = true;
+    } else {
+      collided_vertically = false;
+    }
+  
+    return collision_mask;
 }
+
+
+void update_player_collisions(int *new_x, int *new_y) {
+    unsigned char collision_mask = 0;
+
+    // Check horizontal and vertical collisions
+    collision_mask |= check_player_horizontal_collision(new_x, player_y);
+    collision_mask |= check_player_vertical_collision(player_x, new_y);
+
+    // Handle all collisions detected
+    handle_collisions_from_mask(collision_mask);
+  
+        // Update player position if no collision occurred
+       if (!collided_horizontally) player_x = *new_x;
+       if (!collided_vertically) player_y = *new_y;
+  
+     handle_horizontal_collision(new_x);
+     handle_vertical_collision(new_y);
+   
+}
+
+// Main collision handling function
+void handle_collisions_from_mask(unsigned char collision_mask) {
+    if (collision_mask & COLLISION_BIT_SOLID) {     
+        
+
+    }
+    if (collision_mask & COLLISION_BIT_SPIKE) {
+        // Handle spike collision
+        take_damage();
+    }
+    if (collision_mask & COLLISION_BIT_BENCH) {
+        // Handle bench collision
+        can_sit = true;
+    } else {
+        can_sit = false;
+    }
+}
+
+
+
+bool handle_horizontal_collision(int* new_x) {
+    if (collided_horizontally) {
+        // Ajusta a posição com base na direção do movimento
+      
+        if (player_x_vel_sub > 0) {
+            player_x = ALIGN_TO_TILE(*new_x);  // Ajuste fino para colisão na direita
+        } else {
+            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE;  // Ajuste fino para colisão na esquerda
+        }
+      
+        player_x_vel_sub = 0;  // Para o movimento horizontal
+        return true;    // Colisão ocorreu
+    }
+    return false;  // Sem colisão
+}
+
+
+bool handle_vertical_collision(int* new_y) {
+    if (collided_vertically) {
+        if (player_y_vel_sub >= 0) {  // Check if the player is falling or stationary
+            player_y = ALIGN_TO_TILE(*new_y);  
+            is_on_ground = true;
+
+            // Only trigger landing logic if the player was previously airborne
+            if (!has_landed) {  
+                jump_timer = JUMP_COOLDOWN;
+                can_jump = false;  // Prevent jumping immediately
+                has_landed = true; // Mark as landed
+            }
+        } else {  
+            // Player is colliding upward (e.g., hitting the ceiling)
+            player_y = ALIGN_TO_TILE(*new_y) + TILE_SIZE;  
+        }
+
+        // Reset vertical velocity when landing or colliding upward
+        player_y_vel_sub = 0;  
+        return true;
+    } else {
+        // Player is not colliding vertically
+        is_on_ground = false;
+
+        // Reset the landing flag if the player is no longer on the ground
+        has_landed = false;
+
+    }
+
+    return false;
+}
+
+
+
+
+
 
 //-------- Collision between sprites ----------------//
 
@@ -1303,7 +1311,7 @@ void handle_player_crawlid_collisions(int player_x, int player_y) {
 
         if (c->state == STATE_DEAD) continue;
 
-        if (check_sprite_collision(player_x, player_y, 16, 16, c->x, CRAWLID_Y, 16, 8)) {
+        if (check_sprite_collision(player_x + 2, player_y, 6, 16, c->x, CRAWLID_Y, 14, 7)) {
             take_damage();  // Call the general damage function
         }
     }
@@ -1328,11 +1336,9 @@ void handle_strike_crawlid_collisions(int strike_x, int strike_y) {
 void handle_player_elderbug_collision(int player_x, int player_y) {
     // Check if the player and Elder Bug collide
     if (check_sprite_collision(player_x, player_y, 16, 16, ELDERBUG_X, ELDERBUG_Y, ELDERBUG_WIDTH, ELDERBUG_HEIGHT)) {
-        can_interact = true;  // Enable interaction
         can_talk = true;
 
     } else {
-        can_interact = false;  // Disable interaction if not colliding
         can_talk = false;
     }
 }
@@ -1353,7 +1359,6 @@ void take_damage() {
         if (player_lives > 0) {
             
             flash_screen();
-            reset_player_position();  // Optional: reset player position
             
         } else {
             handle_death();  // Call death handler if no lives remain
@@ -1990,6 +1995,12 @@ void update_dialogue_cooldown() {
 
 // Function to display the interaction indicator
 void update_interaction_indicator(unsigned char* oam_id) {
+    if (can_talk || can_sit) {  // Show arrow if any interaction is possible
+        can_interact = true;
+    } else {
+        can_interact = false;
+    }
+  
     if (can_interact) {
         // Display the up arrow sprite above the player
         *oam_id = oam_spr(player_x, player_y + ARROW_Y_OFFSET, ARROW_TILE, ARROW_ATTR, *oam_id);
@@ -2166,7 +2177,7 @@ void update_game() {
 
   // Update player movement and state
   update_player();
-
+    
   // Animate player
   animate_player(&oam_id, &anim_frame);
   
