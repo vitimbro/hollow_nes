@@ -150,7 +150,7 @@ extern char sfx_data[];
 #define COLLISION_BIT_BENCH  (1 << COLLISION_BENCH)
 
 
-#define DAMAGE_COOLDOWN 90 // Set cooldown time (frames) between spike damage
+#define DAMAGE_COOLDOWN 40 // Set cooldown time (frames) between spike damage
 
 
 #define DIALOGUE_COOLDOWN 30  // Set cooldown for skipping dialogue
@@ -658,6 +658,7 @@ void handle_player_movement();
 int handle_subpixel_movement(int *subpixel_pos, int velocity);
 bool handle_horizontal_collision(int* new_x);
 bool handle_vertical_collision(int* new_y);
+void handle_corner_collision(int* new_x, int* new_y);
 
 // Attack mechanics
 void handle_attack_input(char pad);
@@ -1031,7 +1032,7 @@ void apply_player_physics() {
 
 // Gravity application logic
 void apply_gravity() {
-  if (!collided_vertically) {
+  if (!collided_vertically && !is_sitting) {
       // Check if the jump button is released or the hold time is over
       if (jump_hold_timer == 0) {
           // Apply increased gravity when falling
@@ -1212,8 +1213,10 @@ void update_player_collisions(int *new_x, int *new_y) {
        if (!collided_horizontally) player_x = *new_x;
        if (!collided_vertically) player_y = *new_y;
   
+     handle_corner_collision(new_x, new_y);
      handle_horizontal_collision(new_x);
      handle_vertical_collision(new_y);
+     
    
 }
 
@@ -1242,9 +1245,9 @@ bool handle_horizontal_collision(int* new_x) {
         // Ajusta a posição com base na direção do movimento
       
         if (player_x_vel_sub > 0) {
-            player_x = ALIGN_TO_TILE(*new_x);  // Ajuste fino para colisão na direita
+            player_x = ALIGN_TO_TILE(*new_x) + 5;  // Ajuste fino para colisão na direita
         } else {
-            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE;  // Ajuste fino para colisão na esquerda
+            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE - 6;  // Ajuste fino para colisão na esquerda
         }
       
         player_x_vel_sub = 0;  // Para o movimento horizontal
@@ -1268,7 +1271,7 @@ bool handle_vertical_collision(int* new_y) {
             }
         } else {  
             // Player is colliding upward (e.g., hitting the ceiling)
-            player_y = ALIGN_TO_TILE(*new_y) + TILE_SIZE;  
+            player_y = ALIGN_TO_TILE(*new_y) + TILE_SIZE + 4;  
         }
 
         // Reset vertical velocity when landing or colliding upward
@@ -1286,7 +1289,24 @@ bool handle_vertical_collision(int* new_y) {
     return false;
 }
 
-
+void handle_corner_collision(int* new_x, int* new_y) {
+  if (collided_vertically && collided_horizontally) {
+    // Resolve corner collision
+    if (player_y_vel_sub > player_x_vel_sub) {
+        player_y = ALIGN_TO_TILE(*new_y);  // Prioritize vertical adjustment
+    } else {
+        player_x = ALIGN_TO_TILE(*new_x);  // Prioritize horizontal adjustment
+    }
+  }
+  
+  if (collided_vertically && player_x_vel_sub != 0) {
+    player_x += player_x_vel_sub / 50;  // Slide horizontally based on velocity
+  }
+  if (collided_horizontally && player_y_vel_sub != 0) {
+      player_y += player_y_vel_sub / 50;  // Slide vertically based on velocity
+  }
+  
+}
 
 
 
@@ -1574,6 +1594,7 @@ void animate_player(unsigned char* oam_id, unsigned char* anim_frame) {
     if (is_healing && *anim_frame == HEAL_ANIM_FRAMES - 1) {
         is_healing = false;  // Stop attacking after the animation finishes
     }
+  
 }
 
 
@@ -1625,6 +1646,10 @@ void update_animation_frame(unsigned char* anim_frame) {
         *anim_frame = (*anim_frame + 1) % current_anim_frame_count;  // Update frame with wraparound
     }
     anim_delay_counter = (anim_delay_counter + 1) % current_anim_delay;  // Update delay counter
+  
+    if (is_sitting) {
+        *anim_frame = 0; 
+    }
 }
 
 
@@ -1976,6 +2001,7 @@ void handle_dialogue_input(char pad) {
             load_hud();
             update_hud();
             delay(20);
+            current_dialogue_index = 0;
         } else {
             clear_dialogue_page();
             current_dialogue_index += 1;
@@ -2001,7 +2027,7 @@ void update_interaction_indicator(unsigned char* oam_id) {
         can_interact = false;
     }
   
-    if (can_interact) {
+    if (can_interact && !is_sitting && !is_dialogue_active) {
         // Display the up arrow sprite above the player
         *oam_id = oam_spr(player_x, player_y + ARROW_Y_OFFSET, ARROW_TILE, ARROW_ATTR, *oam_id);
     }
@@ -2107,9 +2133,17 @@ void update_hud() {
 //---------------------------------------------------------------//
 
 void handle_sitting() {
-    player_y -= 10;
+    int current_lives = player_lives;
+  
+    player_y -= 5;
     player_state = STATE_SIT;
     player_lives = MAX_LIVES;  
+    
+    if (player_lives != current_lives) {
+      soul_x = player_x + 5;
+      soul_y = player_y - 8;  // Adjust Y position to appear above the Crawlid
+      soul_active = true;       // Activate soul animation
+    }
 }
 
 //---------------------------------------------------------------------------------------//
