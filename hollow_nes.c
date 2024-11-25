@@ -105,7 +105,7 @@ extern char sfx_data[];
 #define ANIM_DELAY_FALL 1
 #define ANIM_DELAY_ATTACK 6
 #define ANIM_DELAY_HEAL 14
-#define ANIM_DELAY_SIT 1
+#define ANIM_DELAY_SIT 32
 
 // Animation Frame Counts
 #define IDLE_ANIM_FRAMES 2               // Frames in idle animation
@@ -114,7 +114,7 @@ extern char sfx_data[];
 #define FALL_ANIM_FRAMES 1 
 #define ATTACK_ANIM_FRAMES 5
 #define HEAL_ANIM_FRAMES 6
-#define SIT_ANIM_FRAMES 1
+#define SIT_ANIM_FRAMES 2
 
 // Gameplay and Timing Constants
 #define STATE_CHANGE_DELAY 10            // Minimum frames between state changes
@@ -150,7 +150,7 @@ extern char sfx_data[];
 #define COLLISION_BIT_BENCH  (1 << COLLISION_BENCH)
 
 
-#define DAMAGE_COOLDOWN 40 // Set cooldown time (frames) between spike damage
+#define DAMAGE_COOLDOWN 60 // Set cooldown time (frames) between spike damage
 
 
 #define DIALOGUE_COOLDOWN 30  // Set cooldown for skipping dialogue
@@ -332,8 +332,8 @@ DEF_METASPRITE_2x2(player_R_heal_1, 0x14a, 2);      // Healing Right
 DEF_METASPRITE_2x2(player_R_heal_2, 0x15a, 2);
 DEF_METASPRITE_2x2(player_R_heal_3, 0x16a, 2);
 
-DEF_METASPRITE_2x2(player_R_sit, 0x185, 2);      // Sitting Right 
-
+DEF_METASPRITE_2x2(player_R_sit_1, 0x185, 2);      // Sitting Right 
+DEF_METASPRITE_2x2(player_R_sit_2, 0x195, 2);
 
 //------------------------------- FACING LEFT ------------------------------------//
 
@@ -357,7 +357,8 @@ DEF_METASPRITE_2x2_H_FLIP(player_L_heal_1, 0x14a, 2);   // Healing Left
 DEF_METASPRITE_2x2_H_FLIP(player_L_heal_2, 0x15a, 2);
 DEF_METASPRITE_2x2_H_FLIP(player_L_heal_3, 0x16a, 2);
 
-DEF_METASPRITE_2x2_H_FLIP(player_L_sit, 0x185, 2);   // Sitting Left
+DEF_METASPRITE_2x2_H_FLIP(player_L_sit_1, 0x185, 2);   // Sitting Left
+DEF_METASPRITE_2x2_H_FLIP(player_L_sit_2, 0x195, 2);
 
 //------------------------------- FACING UP --------------------------------------//
 
@@ -419,8 +420,8 @@ const unsigned char* const player_L_heal_seq[HEAL_ANIM_FRAMES] = { player_L_heal
 const unsigned char* const player_R_heal_seq[HEAL_ANIM_FRAMES] = { player_R_heal_1, player_R_heal_2, player_R_heal_1, player_R_heal_2, player_R_heal_3, player_R_heal_3 };
 
 // Sit sequences
-const unsigned char* const player_L_sit_seq[SIT_ANIM_FRAMES] = { player_L_sit };
-const unsigned char* const player_R_sit_seq[SIT_ANIM_FRAMES] = { player_R_sit };
+const unsigned char* const player_L_sit_seq[SIT_ANIM_FRAMES] = { player_L_sit_1, player_L_sit_2 };
+const unsigned char* const player_R_sit_seq[SIT_ANIM_FRAMES] = { player_R_sit_1, player_R_sit_2 };
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
@@ -1647,9 +1648,6 @@ void update_animation_frame(unsigned char* anim_frame) {
     }
     anim_delay_counter = (anim_delay_counter + 1) % current_anim_delay;  // Update delay counter
   
-    if (is_sitting) {
-        *anim_frame = 0; 
-    }
 }
 
 
@@ -1696,7 +1694,7 @@ void animate_elder_bug(unsigned char* oam_id) {
     if (elder_bug_delay_counter == 0) {
         elder_bug_anim_frame = (elder_bug_anim_frame + 1) % IDLE_ANIM_FRAMES;
     }
-    elder_bug_delay_counter = (elder_bug_delay_counter + 1) % ANIM_DELAY_IDLE;
+    elder_bug_delay_counter = (elder_bug_delay_counter + 1) % (ANIM_DELAY_IDLE * 2);
 
     // Draw the current Elder Bug frame in a fixed position
     *oam_id = oam_meta_spr(ELDERBUG_X, ELDERBUG_Y, *oam_id, elderbug_idle_seq[elder_bug_anim_frame]);
