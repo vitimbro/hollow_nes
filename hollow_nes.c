@@ -30,6 +30,7 @@
 #include "nametable_game_3_0.h"
 #include "nametable_game_4_0.h"
 // Nametables in second floor (y = 1)
+#include "nametable_game_2_1.h"
 #include "nametable_game_3_1.h"
 #include "nametable_game_4_1.h"
 #include "nametable_game_5_1.h"
@@ -178,7 +179,7 @@ extern char sfx_data[];
 
 // Define Elder Bug position in nametable 1
 #define ELDERBUG_X 72  // Adjust for center positioning in nametable
-#define ELDERBUG_Y 168   // Adjust for Y-axis positioning
+#define ELDERBUG_Y 167   // Adjust for Y-axis positioning
 #define ELDERBUG_WIDTH 16
 #define ELDERBUG_HEIGHT 24
 
@@ -290,16 +291,16 @@ const unsigned char collision_properties[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 2
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 3
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 4
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 5
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 6
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 7
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, // 5
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, // 6
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, // 7
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, // 8
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, // 9
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // a
     0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // b
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // c
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // d
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // e
+    0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, // d
+    0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, // e
     0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, // f
   
 };
@@ -518,7 +519,7 @@ bool is_sitting = false;
 const unsigned char* nametables[6][2] = {
     {nametable_game_0_0, NULL},           // Column 0
     {nametable_game_1_0, NULL},           // Column 1
-    {nametable_game_2_0, NULL},           // Column 2
+    {nametable_game_2_0, nametable_game_2_1},           // Column 2
     {nametable_game_3_0, nametable_game_3_1},  // Column 3
     {nametable_game_4_0, nametable_game_4_1},   // Column 4
     {NULL, nametable_game_5_1},   // Column 4
@@ -1175,7 +1176,7 @@ unsigned char check_player_vertical_collision(int player_x, int* new_y) {
         collision_mask |= (1 << collision_type);
     }
 
-    collision_type = check_collision(player_x + 8, *new_y + 4);
+    collision_type = check_collision(player_x + 10, *new_y + 4);
     if (collision_type != COLLISION_NONE) {
         collision_mask |= (1 << collision_type);
     }
@@ -1185,7 +1186,7 @@ unsigned char check_player_vertical_collision(int player_x, int* new_y) {
         collision_mask |= (1 << collision_type);
     }
 
-    collision_type = check_collision(player_x + 8, *new_y + 16);
+    collision_type = check_collision(player_x + 10, *new_y + 16);
     if (collision_type != COLLISION_NONE) {
         collision_mask |= (1 << collision_type);
     }
@@ -1203,22 +1204,33 @@ unsigned char check_player_vertical_collision(int player_x, int* new_y) {
 void update_player_collisions(int *new_x, int *new_y) {
     unsigned char collision_mask = 0;
 
-    // Check horizontal and vertical collisions
+    // Check for horizontal collisions first
     collision_mask |= check_player_horizontal_collision(new_x, player_y);
+
+    // Check for vertical collisions only if no horizontal collision occurred
     collision_mask |= check_player_vertical_collision(player_x, new_y);
 
     // Handle all collisions detected
     handle_collisions_from_mask(collision_mask);
+
+    // If no collisions occurred, update the player's position
+    if (!collided_horizontally) player_x = *new_x;
+    if (!collided_vertically) player_y = *new_y;
   
-        // Update player position if no collision occurred
-       if (!collided_horizontally) player_x = *new_x;
-       if (!collided_vertically) player_y = *new_y;
+     if (collided_horizontally && collided_vertically) {
+        handle_corner_collision(new_x, new_y);
+        return; // Skip vertical collision handling if horizontal collision occurred
+    }
   
-     handle_corner_collision(new_x, new_y);
-     handle_horizontal_collision(new_x);
-     handle_vertical_collision(new_y);
-     
-   
+      if (collided_horizontally) {
+        handle_horizontal_collision(new_x);
+        return; // Skip vertical collision handling if horizontal collision occurred
+    }
+  
+       if (collided_vertically) {
+        handle_vertical_collision(new_y);
+        return; // Skip further checks if vertical collision occurred
+    }
 }
 
 // Main collision handling function
@@ -1296,15 +1308,12 @@ void handle_corner_collision(int* new_x, int* new_y) {
     if (player_y_vel_sub > player_x_vel_sub) {
         player_y = ALIGN_TO_TILE(*new_y);  // Prioritize vertical adjustment
     } else {
-        player_x = ALIGN_TO_TILE(*new_x);  // Prioritize horizontal adjustment
+      if (player_x_vel_sub > 0) {
+            player_x = ALIGN_TO_TILE(*new_x) - 2;  // Ajuste fino para colisão na direita
+        } else {
+            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE - 1;  // Ajuste fino para colisão na esquerda
+        } 
     }
-  }
-  
-  if (collided_vertically && player_x_vel_sub != 0) {
-    player_x += player_x_vel_sub / 50;  // Slide horizontally based on velocity
-  }
-  if (collided_horizontally && player_y_vel_sub != 0) {
-      player_y += player_y_vel_sub / 50;  // Slide vertically based on velocity
   }
   
 }
