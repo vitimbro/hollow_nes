@@ -34,6 +34,8 @@
 #include "nametable_game_3_1.h"
 #include "nametable_game_4_1.h"
 #include "nametable_game_5_1.h"
+// Nametables in third floor (y = 2)
+#include "nametable_game_2_2.h"
 
 // Menu Nametable
 #include "nametable_menu.h"
@@ -54,6 +56,9 @@ extern char menu_music_data[];
 //#link "dirtmouth_data.s"
 extern char game_music_data[];
 
+// Gameplay Music 2 (Hornet)
+//#link "hornet_data.s"
+extern char hornet_music_data[];
 
 
 // Sound Effects
@@ -177,11 +182,17 @@ extern char sfx_data[];
 #define TILE_MASK_FULL 0xb7
 #define TILE_MASK_EMPTY 0xb8
 
-// Define Elder Bug position in nametable 1
+// Define Elder Bug position in nametable 
 #define ELDERBUG_X 72  // Adjust for center positioning in nametable
 #define ELDERBUG_Y 167   // Adjust for Y-axis positioning
 #define ELDERBUG_WIDTH 16
 #define ELDERBUG_HEIGHT 24
+
+// Define Hornet position in nametable 
+#define HORNET_X 102  // Adjust for center positioning in nametable
+#define HORNET_Y 167   // Adjust for Y-axis positioning
+#define HORNET_WIDTH 16
+#define HORNET_HEIGHT 24
 
 #define CRAWLID_Y 183
 #define CRAWLID_RUN_ANIM_FRAMES 2
@@ -228,7 +239,7 @@ extern char sfx_data[];
         128                                     \
     };
 
-// Metasprites Elder Bug (2x3)
+// Metasprites Elder Bug and Hornet (2x3)
 #define DEF_METASPRITE_2x3(name,code,pal) \
     const unsigned char name[]={          \
         0, 0, (code)+0, pal,              \
@@ -270,9 +281,9 @@ const char PALETTE[32] = {
   0x0F,0x2D,0x32,0x00,   // background palette 3
 
   0x16,0x35,0x24,0x00,	 // sprite palette 0
-  0x00,0x37,0x25,0x00,	 // sprite palette 1
+  0x0F,0x30,0x18,0x00,	 // sprite palette 1
   0x0D,0x30,0x22,0x00,	 // sprite palette 2
-  0x0D,0x27,0x2A,	 // sprite palette 3
+  0x0D,0x30,0x15,	 // sprite palette 3
 };
 
 //------------------------------------------------------------------------------//
@@ -384,11 +395,15 @@ DEF_METASPRITE_2x3(elder_bug_idle_1, 0x1d0, 2);
 DEF_METASPRITE_2x3(elder_bug_idle_2, 0x1e0, 2);
 
 //------- Crawlid -------------//
-DEF_METASPRITE_2x1(crawlid_R_run_1, 0x170, 2);
-DEF_METASPRITE_2x1(crawlid_R_run_2, 0x180, 2);
+DEF_METASPRITE_2x1(crawlid_R_run_1, 0x170, 1);
+DEF_METASPRITE_2x1(crawlid_R_run_2, 0x180, 1);
 
-DEF_METASPRITE_2x1_H_FLIP(crawlid_L_run_1, 0x170, 2);
-DEF_METASPRITE_2x1_H_FLIP(crawlid_L_run_2, 0x180, 2);
+DEF_METASPRITE_2x1_H_FLIP(crawlid_L_run_1, 0x170, 1);
+DEF_METASPRITE_2x1_H_FLIP(crawlid_L_run_2, 0x180, 1);
+
+//------- Hornet -----------//
+DEF_METASPRITE_2x3(hornet_idle_1, 0x1b7, 3);
+DEF_METASPRITE_2x3(hornet_idle_2, 0x1c7, 3);
 
 //----------------------------------------------------------------------------------------//
 //                               PLAYER ANIMATION SEQUENCES                               //
@@ -432,6 +447,9 @@ const unsigned char* const elderbug_idle_seq[IDLE_ANIM_FRAMES] = { elder_bug_idl
 // Crawlid Run sequences
 const unsigned char* const crawlid_L_run_seq[CRAWLID_RUN_ANIM_FRAMES] = { crawlid_L_run_1, crawlid_L_run_2 };
 const unsigned char* const crawlid_R_run_seq[CRAWLID_RUN_ANIM_FRAMES] = { crawlid_R_run_1, crawlid_R_run_2 };
+
+// Hornet Idle sequence
+const unsigned char* const hornet_idle_seq[IDLE_ANIM_FRAMES] = { hornet_idle_1, hornet_idle_2 };
 
 
 //-------------------------------------------------------------------------------------------//
@@ -513,16 +531,17 @@ bool can_talk = false;
 bool is_sitting = false;
 
 
+
 //------------------------- Nametable References --------------------------//
 
 // Two-dimensional array of nametables (organized by x, y)
-const unsigned char* nametables[6][2] = {
-    {nametable_game_0_0, NULL},           // Column 0
-    {nametable_game_1_0, NULL},           // Column 1
-    {nametable_game_2_0, nametable_game_2_1},           // Column 2
-    {nametable_game_3_0, nametable_game_3_1},  // Column 3
-    {nametable_game_4_0, nametable_game_4_1},   // Column 4
-    {NULL, nametable_game_5_1},   // Column 4
+const unsigned char* nametables[6][3] = {
+    {nametable_game_0_0,       NULL,                NULL},           // Column 0
+    {nametable_game_1_0,       NULL,                NULL},           // Column 1
+    {nametable_game_2_0, nametable_game_2_1, nametable_game_2_2},    // Column 2
+    {nametable_game_3_0, nametable_game_3_1,        NULL},           // Column 3
+    {nametable_game_4_0, nametable_game_4_1,        NULL},           // Column 4
+    {       NULL,        nametable_game_5_1,        NULL},           // Column 5
 };
 
 // Current nametable position
@@ -574,10 +593,10 @@ bool is_dialogue_active = false;
 int dialogue_cooldown = 0; // Add a global or static cooldown variable
 
 
-unsigned char soul_tile_top_1 = TILE_SOUL_TOP_FULL_1;
-unsigned char soul_tile_top_2 = TILE_SOUL_TOP_FULL_2; 
-unsigned char soul_tile_bottom_1 = TILE_SOUL_BOTTOM_FULL_1;
-unsigned char soul_tile_bottom_2 = TILE_SOUL_BOTTOM_FULL_2;
+unsigned char soul_tile_top_1 = TILE_SOUL_TOP_EMPTY_1;
+unsigned char soul_tile_top_2 = TILE_SOUL_TOP_EMPTY_2; 
+unsigned char soul_tile_bottom_1 = TILE_SOUL_BOTTOM_EMPTY_1;
+unsigned char soul_tile_bottom_2 = TILE_SOUL_BOTTOM_EMPTY_2;
 
 unsigned char mask_tile_1 = TILE_MASK_FULL;
 unsigned char mask_tile_2 = TILE_MASK_FULL;
@@ -586,6 +605,9 @@ unsigned char mask_tile_3 = TILE_MASK_FULL;
 
 unsigned char elder_bug_anim_frame = 0;    // Animation frame index for Elder Bug
 unsigned char elder_bug_delay_counter = 0; // Frame delay for idle animation
+
+unsigned char hornet_anim_frame = 0;    // Animation frame index for Elder Bug
+unsigned char hornet_delay_counter = 0; // Frame delay for idle animation
 
 int stun_timer = 0;         // Timer for stun duration
 
@@ -620,6 +642,7 @@ Crawlid crawlids[MAX_CRAWLIDS] = {
 bool collided_horizontally = false;
 bool collided_vertically = false;
 
+unsigned char arrow_blink_timer = 0;
 
 
 //------------------------------------------------------------------------------------//
@@ -751,6 +774,9 @@ void handle_player_elderbug_collision(int player_x, int player_y);
 
 void handle_sitting();
 
+void handle_player_hornet_collision(int player_x, int player_y);
+void animate_hornet(unsigned char* oam_id);
+
 //---------------------------------------------------------------------------------------//
 //                            SETUP AND INITIALIZATION                                   //
 //---------------------------------------------------------------------------------------//
@@ -793,7 +819,7 @@ void initialize_player() {
     player_state = STATE_IDLE;                // Start in the idle state
   
     player_lives = MAX_LIVES;
-    player_soul = 60;
+    player_soul = 0;
   
     current_nametable_x = 0;
     current_nametable_y = 0;
@@ -1230,6 +1256,13 @@ void update_player_collisions(int *new_x, int *new_y) {
        if (collided_vertically) {
         handle_vertical_collision(new_y);
         return; // Skip further checks if vertical collision occurred
+    } else {
+        // Player is not colliding vertically
+        is_on_ground = false;
+
+        // Reset the landing flag if the player is no longer on the ground
+        has_landed = false;
+
     }
 }
 
@@ -1290,14 +1323,7 @@ bool handle_vertical_collision(int* new_y) {
         // Reset vertical velocity when landing or colliding upward
         player_y_vel_sub = 0;  
         return true;
-    } else {
-        // Player is not colliding vertically
-        is_on_ground = false;
-
-        // Reset the landing flag if the player is no longer on the ground
-        has_landed = false;
-
-    }
+    } 
 
     return false;
 }
@@ -1313,6 +1339,8 @@ void handle_corner_collision(int* new_x, int* new_y) {
         } else {
             player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE - 1;  // Ajuste fino para colisão na esquerda
         } 
+      
+       
     }
   }
   
@@ -1366,6 +1394,16 @@ void handle_strike_crawlid_collisions(int strike_x, int strike_y) {
 void handle_player_elderbug_collision(int player_x, int player_y) {
     // Check if the player and Elder Bug collide
     if (check_sprite_collision(player_x, player_y, 16, 16, ELDERBUG_X, ELDERBUG_Y, ELDERBUG_WIDTH, ELDERBUG_HEIGHT)) {
+        can_talk = true;
+
+    } else {
+        can_talk = false;
+    }
+}
+
+void handle_player_hornet_collision(int player_x, int player_y) {
+    // Check if the player and Elder Bug collide
+    if (check_sprite_collision(player_x, player_y, 16, 16, HORNET_X, HORNET_Y, HORNET_WIDTH, HORNET_HEIGHT)) {
         can_talk = true;
 
     } else {
@@ -1765,6 +1803,17 @@ void animate_crawlids(unsigned char* oam_id) {
     }
 }
 
+// Function to animate Hornet
+void animate_hornet(unsigned char* oam_id) {
+    // Idle animation update
+    if (hornet_delay_counter == 0) {
+        hornet_anim_frame = (hornet_anim_frame + 1) % IDLE_ANIM_FRAMES;
+    }
+    hornet_delay_counter = (hornet_delay_counter + 1) % (ANIM_DELAY_IDLE);
+
+    // Draw the current Elder Bug frame in a fixed position
+    *oam_id = oam_meta_spr(HORNET_X, HORNET_Y, *oam_id, hornet_idle_seq[hornet_anim_frame]);
+}
 
 //-----------------------------------------------------------------------------//
 //                        Fade In/Out And Flash Functions                                //
@@ -1831,6 +1880,12 @@ void load_new_nametable(unsigned char new_x, unsigned char new_y) {
     ppu_on_all();
   
     load_hud();
+  
+   // Plays Hornet Music when on nametable 2_2
+   if ((current_nametable_x == 2) && (current_nametable_y == 2)) {  
+      famitone_init(hornet_music_data);
+      music_play(0);
+  }
 
     // Fade in the screen
     fade_in();
@@ -1869,7 +1924,7 @@ void check_screen_transition() {
         }
     } else if (player_y >= SCREEN_DOWN_EDGE) {
         // Move to the lower nametable
-        if (current_nametable_y < 1) {  // Adjust based on the number of vertical levels
+        if (current_nametable_y < 2) {  // Adjust based on the number of vertical levels
             player_y = 4;  // Reposition player at top
             load_new_nametable(current_nametable_x, current_nametable_y + 1);
         } else {
@@ -1991,7 +2046,7 @@ void clear_dialogue_page() {
 void clear_dialogue_box() {
     ppu_off(); // Turn off rendering to safely update VRAM
     vram_adr(NAMETABLE_A);
-    vram_write(nametable_game_0_0, 1024);
+    vram_write(nametables[current_nametable_x][current_nametable_y], 1024);
     ppu_on_all();
 }
 
@@ -2196,8 +2251,27 @@ void setup_death() {
 
 //------------------------------- Update States ------------------------------------//
 
+
+
 // Handle the menu state
 void update_menu() {
+    char oam_id = 0;
+    // Update the arrow blink logic
+    arrow_blink_timer++;
+    if (arrow_blink_timer >= 100) {  // Adjust the value for blink speed (e.g., 30 frames on/off)
+        arrow_blink_timer = 0;  // Reset the timer
+    }
+
+
+    // Draw the arrow sprite only when the timer is in the "on" phase
+    if (arrow_blink_timer < 60) {  // Arrow is visible for the first 15 frames
+        oam_id = oam_spr(70, 135, 0x1ed, 1, oam_id);
+        oam_id = oam_spr(184, 135, 0x1ed, 1 | OAM_FLIP_H, oam_id);
+    }
+ 
+    // Hide unused sprites
+    oam_hide_rest(oam_id);
+  
   // Wait for Start button to begin the game
   if (pad_trigger(0) & PAD_START) {
     fade_out(); // Fade out before changing the state
@@ -2210,6 +2284,10 @@ void update_menu() {
     fade_in(); // Fade in after loading the new state
     initialize_player();
   }
+  
+   // Hide unused sprites
+  if (oam_id != 0) oam_hide_rest(oam_id);
+  
 }
 
 // Handle the game state
@@ -2233,6 +2311,12 @@ void update_game() {
       handle_player_elderbug_collision(player_x, player_y);
   }
   
+  // Draw Hornet
+  if ((current_nametable_x == 2) && (current_nametable_y == 2)) {  // Only draw if player is in nametable 1
+      animate_hornet(&oam_id);
+      handle_player_hornet_collision(player_x, player_y);
+  }
+  
   // Update and draw Crawlid if in the correct nametable
   update_crawlids_position();
   animate_crawlids(&oam_id);
@@ -2246,6 +2330,9 @@ void update_game() {
       strike_cooldown--;
   }
 
+  // Hide sprites when dead
+  if (player_lives == 0) oam_hide_rest(0);
+  
   // Hide unused sprites
   if (oam_id != 0) oam_hide_rest(oam_id);
 }
@@ -2253,6 +2340,22 @@ void update_game() {
 
 // Handle the death state
 void update_death() {
+    char oam_id = 0;
+    // Update the arrow blink logic
+    arrow_blink_timer++;
+    if (arrow_blink_timer >= 100) {  // Adjust the value for blink speed (e.g., 30 frames on/off)
+        arrow_blink_timer = 0;  // Reset the timer
+    }
+
+
+    // Draw the arrow sprite only when the timer is in the "on" phase
+    if (arrow_blink_timer < 60) {  // Arrow is visible for the first 15 frames
+        oam_id = oam_spr(70, 135, 0x1ed, 1, oam_id);
+        oam_id = oam_spr(184, 135, 0x1ed, 1 | OAM_FLIP_H, oam_id);
+    }
+ 
+    // Hide unused sprites
+    oam_hide_rest(oam_id);
     // Wait for Start button to return to the main menu
     if (pad_trigger(0) & PAD_START) {
         fade_out(); // Fade out before changing the state
@@ -2261,7 +2364,11 @@ void update_death() {
         setup_menu(); // Load menu nametable
         fade_in(); // Fade in after loading the menu
     }
+  
+    // Hide unused sprites
+    if (oam_id != 0) oam_hide_rest(oam_id);
 }
+
 
 //------------------------------- Check State ------------------------------------//
 
@@ -2292,6 +2399,7 @@ void main(void) {
   delay(60);
   setup_menu(); // Load menu screen initially
   fade_in(); // Fade in after loading the new state
+  
 
 
   // Game loop
