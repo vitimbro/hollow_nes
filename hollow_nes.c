@@ -1283,24 +1283,6 @@ void update_player_collisions(int *new_x, int *new_y) {
     }
 }
 
-// Main collision handling function
-void handle_collisions_from_mask(unsigned char collision_mask) {
-    if (collision_mask & COLLISION_BIT_SOLID) {     
-        
-
-    }
-    if (collision_mask & COLLISION_BIT_SPIKE) {
-        // Handle spike collision
-        take_damage();
-    }
-    if (collision_mask & COLLISION_BIT_BENCH) {
-        // Handle bench collision
-        can_sit = true;
-    } else {
-        can_sit = false;
-    }
-}
-
 
 
 bool handle_horizontal_collision(int* new_x) {
@@ -1362,6 +1344,23 @@ void handle_corner_collision(int* new_x, int* new_y) {
 }
 
 
+// Main collision handling function
+void handle_collisions_from_mask(unsigned char collision_mask) {
+    if (collision_mask & COLLISION_BIT_SOLID) {     
+        
+
+    }
+    if (collision_mask & COLLISION_BIT_SPIKE) {
+        // Handle spike collision
+        take_damage();
+    }
+    if (collision_mask & COLLISION_BIT_BENCH) {
+        // Handle bench collision
+        can_sit = true;
+    } else {
+        can_sit = false;
+    }
+}
 
 
 //-------- Collision between sprites ----------------//
@@ -1395,6 +1394,9 @@ void handle_strike_crawlid_collisions(int strike_x, int strike_y) {
     unsigned char i = 0;
     for (i = 0; i < MAX_CRAWLIDS; i++) {
         Crawlid* c = &crawlids[i];
+      
+        // Skip if not in the current nametable
+        if (c->nametable_x != current_nametable_x || c->nametable_y != current_nametable_y) continue;
 
         if (c->state == STATE_DEAD || strike_cooldown > 0) continue;
 
