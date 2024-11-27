@@ -127,17 +127,19 @@ extern char sfx_data[];
 #define MAX_JUMP_HOLD_TIME 40            // Max frames for holding jump
 #define ATTACK_COOLDOWN 36               // Cooldown frames after attack
 #define FADE_TIME 4                      // Fade in/out duration in frames
+#define FLASH_TIME 6
+#define DAMAGE_COOLDOWN 60               // Set cooldown time (frames) between spike damage
+#define DIALOGUE_COOLDOWN 30             // Set cooldown for skipping dialogue
 
 // Game State Definitions
 #define STATE_MENU  0
 #define STATE_GAME  1
 #define STATE_DEATH 2
 
-
 // Nametable Parameters
 #define NUM_GAME_NAMETABLES_X_0 5            // Total game nametables
 #define NUM_GAME_NAMETABLES_X_1 3            // Total game nametables
-#define NAMETABLE_SIZE 256               // Size of each nametable in pixels
+#define NAMETABLE_SIZE 256                   // Size of each nametable in pixels
 
 // Life and Soul Constants
 #define MAX_LIVES 3                    // Maximum number of lives
@@ -155,16 +157,10 @@ extern char sfx_data[];
 #define COLLISION_BIT_SPIKE  (1 << COLLISION_SPIKE)
 #define COLLISION_BIT_BENCH  (1 << COLLISION_BENCH)
 
-
-#define DAMAGE_COOLDOWN 60 // Set cooldown time (frames) between spike damage
-
-
-#define DIALOGUE_COOLDOWN 30  // Set cooldown for skipping dialogue
-
-#define ARROW_TILE 0x1eb   // Define tile ID for the up arrow sprite
-#define ARROW_Y_OFFSET -24  // Position the arrow 8 pixels above the player
-#define ARROW_ATTR 2        // Default attribute (e.g., no flipping, palette 0)
-
+// Define arrow indicator tile, position and attribute
+#define ARROW_TILE 0x1eb    // Define tile ID for the up arrow sprite
+#define ARROW_Y_OFFSET -24  // Position the arrow 24 pixels above the player
+#define ARROW_ATTR 2        // Define attribute 
 
 // Soul indicators
 #define TILE_SOUL_TOP_FULL_1 0xa5
@@ -176,7 +172,6 @@ extern char sfx_data[];
 #define TILE_SOUL_TOP_EMPTY_2 0xaa
 #define TILE_SOUL_BOTTOM_EMPTY_1 0xb9
 #define TILE_SOUL_BOTTOM_EMPTY_2 0xba
-
 
 // Lives indicators
 #define TILE_MASK_FULL 0xb7
@@ -194,20 +189,20 @@ extern char sfx_data[];
 #define HORNET_WIDTH 16
 #define HORNET_HEIGHT 24
 
+// Crawlid Enemy
+#define MAX_CRAWLIDS 2
 #define CRAWLID_Y 183
 #define CRAWLID_RUN_ANIM_FRAMES 2
-
 #define CRAWLID_HP 60
+
 #define DAMAGE_AMOUNT 20
 
-#define MAX_CRAWLIDS 2
-
 // Constants for Stun Duration
-#define STUN_DURATION 30  // Number of frames the Crawlid is stunned
+#define STUN_DURATION 30  // Number of frames enemy is stunned when attacked
 
 #define STRIKE_COOLDOWN_DURATION 15 // Number of frames before strike can deal damage again
 
-#define FLASH_TIME 6
+
 
 // Metasprites (Define player appearance)
 #define DEF_METASPRITE_2x2(name,code,pal) \
@@ -495,6 +490,11 @@ bool player_facing_right = false;      // Indicates if the player is facing righ
 bool is_on_ground = false;             // Indicates if the player is on the ground
 bool can_jump = true;                  // Indicates if the player can jump
 bool has_landed = false;               // flag to track landing
+bool can_interact = false;      // Indicates if the player can interact with background element
+bool can_sit = false;
+bool can_talk = false;
+bool is_sitting = false;
+bool is_healing = false;        // True if the player is in a healing state
 
 // Jump control variables
 unsigned char jump_timer = 0;          // Timer for jump cooldown
@@ -504,11 +504,6 @@ int jump_hold_timer = 0;               // Timer to control jump height
 bool is_attacking = false;
 unsigned char attack_timer = 0;
 
-// Healing mechanics
-bool is_healing = false;        // True if the player is in a healing state
-
-
-bool can_interact = false;      // Indicates if the player can interact with background element
 
 // Player animation variables
 PlayerState player_state;                          // Current player state 
@@ -522,33 +517,18 @@ unsigned char anim_frame = 0;
 // Frame counters for state changes
 int frames_since_last_state_change = 0;  // Frame counter
 
+// Elder Bug animation variables
+unsigned char elder_bug_anim_frame = 0;    // Animation frame index for Elder Bug
+unsigned char elder_bug_delay_counter = 0; // Frame delay for idle animation
+
+// Hornet animation variables
+unsigned char hornet_anim_frame = 0;    // Animation frame index for Elder Bug
+unsigned char hornet_delay_counter = 0; // Frame delay for idle animation
+
+
 // Game state variable
 unsigned char game_state = STATE_MENU; // Start with menu
 
-bool can_sit = false;
-bool can_talk = false;
-
-bool is_sitting = false;
-
-
-
-//------------------------- Nametable References --------------------------//
-
-// Two-dimensional array of nametables (organized by x, y)
-const unsigned char* nametables[6][3] = {
-    {nametable_game_0_0,       NULL,                NULL},           // Column 0
-    {nametable_game_1_0,       NULL,                NULL},           // Column 1
-    {nametable_game_2_0, nametable_game_2_1, nametable_game_2_2},    // Column 2
-    {nametable_game_3_0, nametable_game_3_1,        NULL},           // Column 3
-    {nametable_game_4_0, nametable_game_4_1,        NULL},           // Column 4
-    {       NULL,        nametable_game_5_1,        NULL},           // Column 5
-};
-
-// Current nametable position
-unsigned char current_nametable_x = 0;  // X index
-unsigned char current_nametable_y = 0;  // Y index
-
-//---------------------------------------------------------------------------------------//
 
 // Attack direction constants
 typedef enum { 
@@ -560,6 +540,12 @@ typedef enum {
 
 unsigned char attack_direction;
 
+int damage_cooldown = 0;  // Initialize cooldown counter
+
+int stun_timer = 0;         // Timer for stun duration
+
+int strike_cooldown = 0;
+
 
 // Player Soul and Life Variables
 unsigned char player_lives = MAX_LIVES;       // Player's current lives, starts at max
@@ -569,30 +555,7 @@ unsigned char player_soul = 0;                // Player's current soul, starts a
 unsigned char previous_soul = 0;
 unsigned char previous_lives = 0;
 
-int damage_cooldown = 0;  // Initialize cooldown counter
-
-
-// Dialogue System
-
-typedef struct {
-    const char* text;  // Text to display
-    int next;          // Index of the next line (-1 if end)
-} Dialogue;
-
-Dialogue dialogues[] = {
-    {"OLA AMIGO!", 1},
-    {"TUDO BEM?", 2},
-    {"FOQUE SUA ALMA E SE CUREAPERTANDO \x1d !", 3},
-    {"USE SEU FERRAO PARA     ATACAR APERTANDO B.", -1}
-};
-
-// Global variables for dialogue
-int current_dialogue_index = 0;
-bool is_dialogue_active = false;
-
-int dialogue_cooldown = 0; // Add a global or static cooldown variable
-
-
+// Tiles for updating HUD
 unsigned char soul_tile_top_1 = TILE_SOUL_TOP_EMPTY_1;
 unsigned char soul_tile_top_2 = TILE_SOUL_TOP_EMPTY_2; 
 unsigned char soul_tile_bottom_1 = TILE_SOUL_BOTTOM_EMPTY_1;
@@ -603,22 +566,13 @@ unsigned char mask_tile_2 = TILE_MASK_FULL;
 unsigned char mask_tile_3 = TILE_MASK_FULL;
 
 
-unsigned char elder_bug_anim_frame = 0;    // Animation frame index for Elder Bug
-unsigned char elder_bug_delay_counter = 0; // Frame delay for idle animation
-
-unsigned char hornet_anim_frame = 0;    // Animation frame index for Elder Bug
-unsigned char hornet_delay_counter = 0; // Frame delay for idle animation
-
-int stun_timer = 0;         // Timer for stun duration
-
-int strike_cooldown = 0;
-
 // Soul animation properties
 int soul_x, soul_y;                 // Position of the soul animation
 unsigned char soul_frame = 0;        // Current frame of the soul animation
 bool soul_active = false;       // Whether the soul animation is active
 unsigned char soul_anim_counter = 0; // Counter for controlling the animation speed
 unsigned char soul_anim_delay_counter = 0;
+
 
 // Global Variables for Crawlid's Position and State
 typedef struct {
@@ -644,17 +598,109 @@ bool collided_vertically = false;
 
 unsigned char arrow_blink_timer = 0;
 
+bool collided_elderbug = false;
+bool collided_hornet = false;
+
+//------------------------- Dialogue Variables --------------------------//
+
+typedef struct {
+    const char* text;  // Text to display
+    int next;          // Index of the next line (-1 if end)
+} Dialogue;
+
+Dialogue dialogues[] = {
+    {"OLA AMIGO!", 1},
+    {"TUDO BEM?", 2},
+    {"FOQUE SUA ALMA E SE CUREAPERTANDO \x1d !", 3},
+    {"USE SEU FERRAO PARA     ATACAR APERTANDO B.", -1},
+    {"KISAAAH!!", 4},
+    {"HYAA!", -2}
+};
+
+// Global variables for dialogue
+int current_dialogue_index = 0;
+bool is_dialogue_active = false;
+
+int dialogue_cooldown = 0; // Add a global or static cooldown variable
+
+
+//------------------------- Nametable References --------------------------//
+
+// Two-dimensional array of nametables (organized by x, y)
+const unsigned char* nametables[6][3] = {
+    {nametable_game_0_0,       NULL,                NULL},           // Column 0
+    {nametable_game_1_0,       NULL,                NULL},           // Column 1
+    {nametable_game_2_0, nametable_game_2_1, nametable_game_2_2},    // Column 2
+    {nametable_game_3_0, nametable_game_3_1,        NULL},           // Column 3
+    {nametable_game_4_0, nametable_game_4_1,        NULL},           // Column 4
+    {       NULL,        nametable_game_5_1,        NULL},           // Column 5
+};
+
+// Current nametable position
+unsigned char current_nametable_x = 0;  // X index
+unsigned char current_nametable_y = 0;  // Y index
+
 
 //------------------------------------------------------------------------------------//
 //                              FUNCTION PROTOTYPES                                   //
 //------------------------------------------------------------------------------------//
 
-// Setup functions
+//------------------- Initialization and Setup ---------------------//
+
 void setup_graphics();
 void setup_audio();
+void setup_menu();
+void setup_game();
+void setup_death();
 void initialize_player();
 
-// Tile and collision detection
+//------------------- Core Game Loop and State Management ---------------------//
+
+void update_menu();
+void update_game();
+void update_death();
+void check_game_state();
+
+//------------------- HUD and Visual Effects ---------------------//
+
+void load_hud();
+void update_hud();
+void update_soul_indicator();
+void update_lives_indicator();
+
+void fade_in();
+void fade_out();
+void flash_screen();
+
+//------------------- Player Input and State Handling ---------------------//
+
+void update_player(); 
+
+void handle_player_input();
+void handle_horizontal_movement_input(char pad);
+void handle_jump_input(char pad);
+void handle_attack_input(char pad);
+void handle_heal_input(char pad);
+void handle_interact_input(char pad);
+
+void handle_sitting();
+void attempt_heal();
+void player_jump();
+void handle_player_strike();
+
+//------------------- Player Movement and Physics ---------------------//
+
+void handle_player_movement();
+int handle_subpixel_movement(int *subpixel_pos, int velocity);
+void apply_player_physics();
+void apply_gravity();
+void update_jump_timer();
+void move_player_left();
+void move_player_right();
+void stop_horizontal_movement();
+
+//------------------- Collision Detection and Handling ---------------------//
+
 unsigned char get_tile_at(unsigned char x, unsigned char y);
 unsigned char check_collision(int x, int y);
 void handle_collisions_from_mask(unsigned char collision_mask);
@@ -662,41 +708,49 @@ unsigned char check_player_horizontal_collision(int* new_x, int player_y);
 unsigned char check_player_vertical_collision(int player_x, int* new_y);
 void update_player_collisions(int* new_x, int* new_y);
 
-
-// Player update and input handling
-void update_player();
-void handle_player_input();
-void handle_horizontal_movement_input(char pad);
-void move_player_left();
-void move_player_right();
-void stop_horizontal_movement();
-
-// Jump mechanics and physics
-void handle_jump_input(char pad);
-void player_jump();
-void apply_player_physics();
-void apply_gravity();
-void update_jump_timer();
-
-// Movement handling
-void handle_player_movement();
-int handle_subpixel_movement(int *subpixel_pos, int velocity);
 bool handle_horizontal_collision(int* new_x);
 bool handle_vertical_collision(int* new_y);
 void handle_corner_collision(int* new_x, int* new_y);
 
-// Attack mechanics
-void handle_attack_input(char pad);
+bool check_sprite_collision(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2);
+
+void handle_player_elderbug_collision(int player_x, int player_y);
+void handle_player_hornet_collision(int player_x, int player_y);
+
+void update_interaction_indicator(unsigned char* oam_id);
+
+//------------------- Dialogue System ---------------------//
+
+void handle_dialogue();
+void load_dialogue_box();
+void load_dialogue_page();
+void clear_dialogue_box();
+void clear_dialogue_page();
+void handle_dialogue_input(char pad);
+void update_dialogue_cooldown();
+
+//------------------- Nametable Handling ---------------------//
+
+void load_nametable(int index);
+void load_new_nametable(unsigned char new_x, unsigned char new_y);
+void check_screen_transition();
+
+//------------------- Player Animation ---------------------//
+
+void animate_player(unsigned char* oam_id, unsigned char* anim_frame);
+const unsigned char* const* get_animation_sequence();
+void update_animation_sequence(const unsigned char* const* new_seq, unsigned char* anim_frame);
+void update_animation_frame(unsigned char* anim_frame);
+void draw_current_frame(unsigned char* oam_id, unsigned char anim_frame);
+
 void draw_strike(unsigned char* oam_id);
+void draw_soul_animation(unsigned char* oam_id);
 
-// Healing mechanics
-void handle_heal_input(char pad);
-void attempt_heal();
+void animate_elder_bug(unsigned char* oam_id);
+void animate_hornet(unsigned char* oam_id);
 
-// Interaction mechanics
-void handle_interact_input(char pad);
+//------------------- State Updates ---------------------//
 
-// Player state and animation
 void update_player_animation_state();
 void set_running_state();
 void set_idle_state();
@@ -706,76 +760,19 @@ void set_attacking_state();
 void set_healing_state();
 void set_sitting_state();
 
-// Animation sequence and frame handling
-void animate_player(unsigned char* oam_id, unsigned char* anim_frame);
-const unsigned char* const* get_animation_sequence();
-void update_animation_sequence(const unsigned char* const* new_seq, unsigned char* anim_frame);
-void update_animation_frame(unsigned char* anim_frame);
-void draw_current_frame(unsigned char* oam_id, unsigned char anim_frame);
-
-// Game state and menu handling
-void update_menu();
-void setup_menu();
-void update_game();
-void setup_game();
-void update_death();
-void setup_death();
-void check_game_state();
-
-// Visual effects
-void fade_in();
-void fade_out();
-void flash_screen();
-
-// Background scrolling and nametable loading
-void load_nametable(int index);
-void scroll_background();
-
-
-// Dialogue System
-void handle_dialogue();
-void load_dialogue_box();
-void load_dialogue_page();
-void clear_dialogue_box();
-void clear_dialogue_page();
-void handle_dialogue_input(char pad);
-void update_dialogue_cooldown();
-
-
-
-void update_interaction_indicator(unsigned char* oam_id);
-
-void load_hud();
-void update_soul_indicator();
-void update_lives_indicator();
-void update_hud();
-
-
-void load_new_nametable(unsigned char new_x, unsigned char new_y);
-void check_screen_transition();
-
-void update_crawlids_position();
-void animate_crawlids(unsigned char* oam_id);
-
-bool check_sprite_collision(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2);
-void handle_player_crawlid_collisions(int player_x, int player_y);
+//------------------- Damage and Death Handling ---------------------//
 
 void take_damage();
 void handle_death();
 
+//------------------- Enemies  ---------------------//
 
-void handle_player_strike();
+void update_crawlids_position();
+void animate_crawlids(unsigned char* oam_id);
+void handle_player_crawlid_collisions(int player_x, int player_y);
 void handle_crawlid_damage(Crawlid* c);
 void handle_strike_crawlid_collisions(int strike_x, int strike_y);
 
-void draw_soul_animation(unsigned char* oam_id);
-
-void handle_player_elderbug_collision(int player_x, int player_y);
-
-void handle_sitting();
-
-void handle_player_hornet_collision(int player_x, int player_y);
-void animate_hornet(unsigned char* oam_id);
 
 //---------------------------------------------------------------------------------------//
 //                            SETUP AND INITIALIZATION                                   //
@@ -825,11 +822,13 @@ void initialize_player() {
     current_nametable_y = 0;
   
     
-    // crawlid_hp = CRAWLID_HP;
+    // initialize crawlid enemies
     
     for (i = 0; i < MAX_CRAWLIDS; i++) {
         Crawlid* c = &crawlids[i];
         
+        c->x = 120;
+        c->direction = 1;
         c->hp = CRAWLID_HP;
         c->state = STATE_ALIVE;
     }
@@ -960,6 +959,8 @@ void handle_interact_input(char pad) {
       
         if (can_talk){
           player_state = STATE_DIALOGUE;
+          if (collided_elderbug) current_dialogue_index = 0;
+          if (collided_hornet) current_dialogue_index = 4;
           is_dialogue_active = true;
           handle_dialogue();  // Open the dialogue box
         }
@@ -969,7 +970,6 @@ void handle_interact_input(char pad) {
            is_sitting = true;
            handle_sitting();
         }
-     
     }
 }
 
@@ -990,6 +990,24 @@ void attempt_heal() {
         player_y_vel_sub = 0;           // Stop vertical movement
     } else {
         // Optional: Play "not enough soul" sound or animation
+    }
+}
+
+//-----------------------------------------------------------------------//
+//                        Handle Sitting                                 //
+//-----------------------------------------------------------------------//
+
+void handle_sitting() {
+    int current_lives = player_lives;
+  
+    player_y -= 5;
+    player_state = STATE_SIT;
+    player_lives = MAX_LIVES;  
+    
+    if (player_lives != current_lives) {
+      soul_x = player_x + 5;
+      soul_y = player_y - 8;  // Adjust Y position to appear above the Crawlid
+      soul_active = true;       // Activate soul animation
     }
 }
 
@@ -1128,6 +1146,7 @@ void handle_player_movement() {
 }
 
 
+
 //------------------------------------------------------------------------------------------//
 //                                 COLLISION FUNCTIONS                                      //
 //------------------------------------------------------------------------------------------//
@@ -1160,69 +1179,67 @@ unsigned char check_collision(int x, int y) {
 // Check if the player's bounding box collides with different types of tiles
 unsigned char check_player_horizontal_collision(int *new_x, int player_y) {
     unsigned char collision_mask = 0;
+    unsigned char i;
 
-    // Check all corners for horizontal collision
-    unsigned char collision_type = check_collision(*new_x + 6, player_y + 4);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
+    // Define the collision points for horizontal checks
+    const unsigned char collision_points[][2] = {
+        {5, 5},    // Top-Left
+        {5, 7},   // Mid-Left-1
+        {5, 10},   // Mid-Left-2
+        {5, 13},   // Mid-Left-3
+        {5, 15},   // Bottom-Left
+        {11, 5},   // Top-Right
+        {11, 7},  // Mid-Right-1
+        {11, 10},  // Mid-Right-2
+        {11, 13},  // Mid-Right-3
+        {11, 15}   // Bottom-Right
+    };
+
+    // Check all defined collision points
+    for (i = 0; i < 6; ++i) {
+        unsigned char collision_type = check_collision(*new_x + collision_points[i][0], player_y + collision_points[i][1]);
+        if (collision_type != COLLISION_NONE) {
+            collision_mask |= (1 << collision_type);
+        }
     }
 
-    collision_type = check_collision(*new_x + 10, player_y + 4);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
-    }
+    // Update the collision flag
+    collided_horizontally = (collision_mask & COLLISION_BIT_SOLID) != 0;
 
-    collision_type = check_collision(*new_x + 6, player_y + 15);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
-    }
-
-    collision_type = check_collision(*new_x + 10, player_y + 15);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
-    }
-    
-    if (collision_mask & COLLISION_BIT_SOLID){
-      collided_horizontally = true;
-    } else {
-      collided_horizontally = false;
-    }
-    
     return collision_mask;
 }
 
 
 
-unsigned char check_player_vertical_collision(int player_x, int* new_y) {
+unsigned char check_player_vertical_collision(int player_x, int *new_y) {
     unsigned char collision_mask = 0;
+    unsigned char i;
 
-    // Check all corners for vertical collision
-    unsigned char collision_type = check_collision(player_x + 6, *new_y + 4);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
+    // Define the collision points for vertical checks
+    const unsigned char collision_points[][2] = {
+        {6, 4},    // Top-Left
+        {7, 4},    // Top-Mid-1
+        {8, 4},    // Top-Mid-2
+        {9, 4},    // Top-Mid-3
+        {10, 4},   // Top-Right
+        {6, 16},   // Bottom-Left
+        {7, 16},   // Bottom_Mid-1
+        {8, 16},   // Bottom_Mid-2
+        {9, 16},   // Bottom_Mid-3
+        {10, 16}   // Bottom-Right
+    };
+
+    // Check all defined collision points
+    for (i = 0; i < 6; ++i) {
+        unsigned char collision_type = check_collision(player_x + collision_points[i][0], *new_y + collision_points[i][1]);
+        if (collision_type != COLLISION_NONE) {
+            collision_mask |= (1 << collision_type);
+        }
     }
 
-    collision_type = check_collision(player_x + 10, *new_y + 4);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
-    }
+    // Update the collision flag
+    collided_vertically = (collision_mask & COLLISION_BIT_SOLID) != 0;
 
-    collision_type = check_collision(player_x + 6, *new_y + 16);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
-    }
-
-    collision_type = check_collision(player_x + 10, *new_y + 16);
-    if (collision_type != COLLISION_NONE) {
-        collision_mask |= (1 << collision_type);
-    }
-    
-    if (collision_mask & COLLISION_BIT_SOLID){
-      collided_vertically = true;
-    } else {
-      collided_vertically = false;
-    }
-  
     return collision_mask;
 }
 
@@ -1291,9 +1308,9 @@ bool handle_horizontal_collision(int* new_x) {
         // Ajusta a posição com base na direção do movimento
       
         if (player_x_vel_sub > 0) {
-            player_x = ALIGN_TO_TILE(*new_x) + 5;  // Ajuste fino para colisão na direita
+            player_x = ALIGN_TO_TILE(*new_x);  // Ajuste fino para colisão na direita
         } else {
-            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE - 6;  // Ajuste fino para colisão na esquerda
+            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE ;  // Ajuste fino para colisão na esquerda
         }
       
         player_x_vel_sub = 0;  // Para o movimento horizontal
@@ -1335,12 +1352,10 @@ void handle_corner_collision(int* new_x, int* new_y) {
         player_y = ALIGN_TO_TILE(*new_y);  // Prioritize vertical adjustment
     } else {
       if (player_x_vel_sub > 0) {
-            player_x = ALIGN_TO_TILE(*new_x) - 2;  // Ajuste fino para colisão na direita
+            player_x = ALIGN_TO_TILE(*new_x) - 1;  // Ajuste fino para colisão na direita
         } else {
             player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE - 1;  // Ajuste fino para colisão na esquerda
-        } 
-      
-       
+        }   
     }
   }
   
@@ -1392,25 +1407,31 @@ void handle_strike_crawlid_collisions(int strike_x, int strike_y) {
 }
 
 void handle_player_elderbug_collision(int player_x, int player_y) {
+    // Skip if not in the current nametable
+    if (current_nametable_x != 0 || current_nametable_y != 0) return;
     // Check if the player and Elder Bug collide
     if (check_sprite_collision(player_x, player_y, 16, 16, ELDERBUG_X, ELDERBUG_Y, ELDERBUG_WIDTH, ELDERBUG_HEIGHT)) {
         can_talk = true;
-
+        collided_elderbug = true;
     } else {
         can_talk = false;
+        collided_elderbug = false;
     }
 }
 
 void handle_player_hornet_collision(int player_x, int player_y) {
+    // Skip if not in the current nametable
+    if (current_nametable_x != 2 || current_nametable_y != 2) return;
+  
     // Check if the player and Elder Bug collide
     if (check_sprite_collision(player_x, player_y, 16, 16, HORNET_X, HORNET_Y, HORNET_WIDTH, HORNET_HEIGHT)) {
         can_talk = true;
-
+        collided_hornet = true;
     } else {
         can_talk = false;
+        collided_hornet = false;
     }
 }
-
 
 
 //-----------------------------------------------------------------------------//
@@ -1702,7 +1723,6 @@ void update_animation_frame(unsigned char* anim_frame) {
 void draw_current_frame(unsigned char* oam_id, unsigned char anim_frame) {
     *oam_id = oam_meta_spr(player_x, player_y, *oam_id, current_seq[anim_frame]);
 }
-
 
 
 
@@ -2055,7 +2075,7 @@ void handle_dialogue_input(char pad) {
     update_dialogue_cooldown();
   
     if (dialogue_cooldown == 0 && (pad & PAD_A)) {  // Only allow input if cooldown is zero
-        if (dialogues[current_dialogue_index].next == -1) {
+        if (dialogues[current_dialogue_index].next < 0) {
             is_dialogue_active = false;
             player_state = STATE_IDLE;  // Return control to player
             clear_dialogue_box();
@@ -2063,7 +2083,6 @@ void handle_dialogue_input(char pad) {
             load_hud();
             update_hud();
             delay(20);
-            current_dialogue_index = 0;
         } else {
             clear_dialogue_page();
             current_dialogue_index += 1;
@@ -2080,6 +2099,7 @@ void update_dialogue_cooldown() {
     }
 }
 
+//----------------------------------------------------------------------------------//
 
 // Function to display the interaction indicator
 void update_interaction_indicator(unsigned char* oam_id) {
@@ -2191,22 +2211,6 @@ void update_hud() {
     update_lives_indicator();
 }
 
-
-//---------------------------------------------------------------//
-
-void handle_sitting() {
-    int current_lives = player_lives;
-  
-    player_y -= 5;
-    player_state = STATE_SIT;
-    player_lives = MAX_LIVES;  
-    
-    if (player_lives != current_lives) {
-      soul_x = player_x + 5;
-      soul_y = player_y - 8;  // Adjust Y position to appear above the Crawlid
-      soul_active = true;       // Activate soul animation
-    }
-}
 
 //---------------------------------------------------------------------------------------//
 //                             GAME STATE FUNCTIONS                                      //
