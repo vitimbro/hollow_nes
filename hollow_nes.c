@@ -34,6 +34,9 @@
 #include "nametable_game_3_1.h"
 #include "nametable_game_4_1.h"
 #include "nametable_game_5_1.h"
+#include "nametable_game_6_1.h"
+#include "nametable_game_7_1.h"
+#include "nametable_game_8_1.h"
 // Nametables in third floor (y = 2)
 #include "nametable_game_2_2.h"
 
@@ -138,7 +141,7 @@ extern char sfx_data[];
 
 // Nametable Parameters
 #define NUM_GAME_NAMETABLES_X_0 5            // Total game nametables
-#define NUM_GAME_NAMETABLES_X_1 3            // Total game nametables
+#define NUM_GAME_NAMETABLES_X_1 8            // Total game nametables
 #define NAMETABLE_SIZE 256                   // Size of each nametable in pixels
 
 // Life and Soul Constants
@@ -273,7 +276,7 @@ const char PALETTE[32] = {
   0x0F,0x30,0x2D,0x00,	 // background palette 0
   0x0F,0x20,0x03,0x00,	 // background palette 1
   0x0F,0x2D,0x20,0x00,	 // background palette 2
-  0x0F,0x2D,0x32,0x00,   // background palette 3
+  0x0F,0x20,0x2A,0x00,   // background palette 3
 
   0x16,0x35,0x24,0x00,	 // sprite palette 0
   0x0F,0x30,0x18,0x00,	 // sprite palette 1
@@ -636,13 +639,16 @@ int dialogue_cooldown = 0; // Add a global or static cooldown variable
 //------------------------- Nametable References --------------------------//
 
 // Two-dimensional array of nametables (organized by x, y)
-const unsigned char* nametables[6][3] = {
+const unsigned char* nametables[9][3] = {
     {nametable_game_0_0,       NULL,                NULL},           // Column 0
     {nametable_game_1_0,       NULL,                NULL},           // Column 1
     {nametable_game_2_0, nametable_game_2_1, nametable_game_2_2},    // Column 2
     {nametable_game_3_0, nametable_game_3_1,        NULL},           // Column 3
     {nametable_game_4_0, nametable_game_4_1,        NULL},           // Column 4
     {       NULL,        nametable_game_5_1,        NULL},           // Column 5
+    {       NULL,        nametable_game_6_1,        NULL},           // Column 6
+    {       NULL,        nametable_game_7_1,        NULL},           // Column 7
+    {       NULL,        nametable_game_8_1,        NULL},           // Column 8
 };
 
 // Current nametable position
@@ -1899,7 +1905,7 @@ void load_new_nametable(unsigned char new_x, unsigned char new_y) {
         return;  // No nametable to load, exit the function
     }
 
-    sfx_play(3,3);
+    sfx_play(7,7);
   
     // Fade out the screen
     fade_out();
@@ -1940,7 +1946,7 @@ void check_screen_transition() {
         }
     } else if (player_x >= SCREEN_RIGHT_EDGE) {
         // Move to the right nametable
-        if (current_nametable_x < 5) {
+        if (current_nametable_x < 10) {
             player_x = 1;  // Reposition player on left side
             load_new_nametable(current_nametable_x + 1, current_nametable_y);
         } else {
