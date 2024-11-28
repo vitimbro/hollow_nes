@@ -1309,7 +1309,7 @@ bool handle_horizontal_collision(int* new_x) {
         if (player_x_vel_sub > 0) {
             player_x = ALIGN_TO_TILE(*new_x);  // Ajuste fino para colisão na direita
         } else {
-            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE ;  // Ajuste fino para colisão na esquerda
+            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE - 4;  // Ajuste fino para colisão na esquerda
         }
       
         player_x_vel_sub = 0;  // Para o movimento horizontal
@@ -1345,19 +1345,25 @@ bool handle_vertical_collision(int* new_y) {
 }
 
 void handle_corner_collision(int* new_x, int* new_y) {
-  if (collided_vertically && collided_horizontally) {
-    // Resolve corner collision
-    if (player_y_vel_sub > player_x_vel_sub) {
-        player_y = ALIGN_TO_TILE(*new_y);  // Prioritize vertical adjustment
-    } else {
-      if (player_x_vel_sub > 0) {
-            player_x = ALIGN_TO_TILE(*new_x) - 1;  // Ajuste fino para colisão na direita
-        } else {
-            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE - 1;  // Ajuste fino para colisão na esquerda
-        }   
+    if (collided_vertically && collided_horizontally) {
+        // Prioritize vertical resolution if falling
+        if (player_y_vel_sub >= 0) {
+            player_y = ALIGN_TO_TILE(*new_y);  // Align vertically
+            player_y_vel_sub = 0;  // Reset vertical velocity
+            is_on_ground = true;  // Set ground state
+        } else if (player_y_vel_sub < 0) {
+            player_y = ALIGN_TO_TILE(*new_y) + TILE_SIZE;  // Ceiling collision
+            player_y_vel_sub = 0;
+        }
+
+        // After vertical adjustment, check horizontal collision
+        if (player_x_vel_sub > 0) {
+            player_x = ALIGN_TO_TILE(*new_x);  // Adjust rightward
+        } else if (player_x_vel_sub < 0) {
+            player_x = ALIGN_TO_TILE(*new_x) + TILE_SIZE ;  // Adjust leftward
+        }
+        player_x_vel_sub = 0;  // Reset horizontal velocity
     }
-  }
-  
 }
 
 
