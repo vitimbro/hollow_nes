@@ -626,7 +626,7 @@ Dialogue dialogues[] = {
     {"HYAA!", 10},
     {"ESSE PROJETO AINDA ESTA EM DESENVOLVIMENTO.", 11},
     {"SE DESEJA ACOMPANHAR O  DESENVOLVIMENTO, SIGA   NAS REDES SOCIAIS!", 12},
-    {"@VITIMBRO", -2}
+    {"@ANOTHERUNIVERSE.HOME", -2}
 };
 
 // Global variables for dialogue
@@ -1213,7 +1213,7 @@ unsigned char check_player_horizontal_collision(int *new_x, int player_y) {
     };
 
     // Check all defined collision points
-    for (i = 0; i < 6; ++i) {
+    for (i = 0; i < 10; ++i) {
         unsigned char collision_type = check_collision(*new_x + collision_points[i][0], player_y + collision_points[i][1]);
         if (collision_type != COLLISION_NONE) {
             collision_mask |= (1 << collision_type);
@@ -1247,7 +1247,7 @@ unsigned char check_player_vertical_collision(int player_x, int *new_y) {
     };
 
     // Check all defined collision points
-    for (i = 0; i < 6; ++i) {
+    for (i = 0; i < 10; ++i) {
         unsigned char collision_type = check_collision(player_x + collision_points[i][0], *new_y + collision_points[i][1]);
         if (collision_type != COLLISION_NONE) {
             collision_mask |= (1 << collision_type);
