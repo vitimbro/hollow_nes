@@ -892,7 +892,6 @@ void handle_player_input() {
 void handle_jump_input(char pad) { 
     if (is_on_ground && (pad & PAD_A) && can_jump) {
         player_jump();  // Initiate jump
-        sfx_play(1,1);
     }
 
     // If the jump button is being held and the player is jumping
@@ -968,6 +967,7 @@ void handle_interact_input(char pad) {
         if (can_sit){
            player_state = STATE_SIT;
            is_sitting = true;
+           sfx_play(2,2);
            handle_sitting();
         }
     }
@@ -984,7 +984,7 @@ void attempt_heal() {
         is_healing = true;              // Enter healing state
         player_soul -= SOUL_COST_HEAL;  // Deduct soul
         player_lives++;                 // Increase lives by one
-        sfx_play(0, 0);                 // Play healing sound
+        sfx_play(4, 4);                 // Play healing sound
         set_healing_state();            // Update player to healing state
         player_x_vel_sub = 0;           // Stop player movement
         player_y_vel_sub = 0;           // Stop vertical movement
@@ -1008,6 +1008,7 @@ void handle_sitting() {
       soul_x = player_x + 5;
       soul_y = player_y - 8;  // Adjust Y position to appear above the Crawlid
       soul_active = true;       // Activate soul animation
+      sfx_play(4,4);
     }
 }
 
@@ -1063,6 +1064,7 @@ void stop_horizontal_movement() {
 //---------------------------------------------------------------------//
 
 void player_jump() {
+    sfx_play(2,2);
     player_y_vel_sub = JUMP_SPEED;
     is_on_ground = false;
     can_jump = false;
@@ -1444,7 +1446,7 @@ void handle_player_hornet_collision(int player_x, int player_y) {
 void take_damage() {
     if (damage_cooldown == 0) {  // Only take damage if cooldown has elapsed
         player_lives--;
-        sfx_play(0, 0);           // Play damage sound effect
+        sfx_play(1, 1);           // Play damage sound effect
         damage_cooldown = DAMAGE_COOLDOWN;  // Reset cooldown
 
         if (player_lives > 0) {
@@ -1888,6 +1890,8 @@ void load_new_nametable(unsigned char new_x, unsigned char new_y) {
         return;  // No nametable to load, exit the function
     }
 
+    sfx_play(3,3);
+  
     // Fade out the screen
     fade_out();
     
@@ -1902,6 +1906,7 @@ void load_new_nametable(unsigned char new_x, unsigned char new_y) {
     ppu_on_all();
   
     load_hud();
+  
   
    // Plays Hornet Music when on nametable 2_2
    if ((current_nametable_x == 2) && (current_nametable_y == 2)) {  
@@ -1964,6 +1969,7 @@ void check_screen_transition() {
 
 void handle_dialogue(){
         char pad = pad_poll(0);
+        sfx_play(5,5);
 	load_dialogue_box();
         clear_dialogue_page();
   	load_dialogue_page();     
@@ -2078,6 +2084,7 @@ void handle_dialogue_input(char pad) {
   
     if (dialogue_cooldown == 0 && (pad & PAD_A)) {  // Only allow input if cooldown is zero
         if (dialogues[current_dialogue_index].next < 0) {
+            sfx_play(6,6);
             is_dialogue_active = false;
             player_state = STATE_IDLE;  // Return control to player
             clear_dialogue_box();
@@ -2086,6 +2093,7 @@ void handle_dialogue_input(char pad) {
             update_hud();
             delay(20);
         } else {
+            sfx_play(7,7);
             clear_dialogue_page();
             current_dialogue_index += 1;
             load_dialogue_page();
@@ -2280,6 +2288,7 @@ void update_menu() {
   
   // Wait for Start button to begin the game
   if (pad_trigger(0) & PAD_START) {
+    sfx_play(5,5);
     fade_out(); // Fade out before changing the state
     music_stop();                 // Stop menu music
     delay(60);
@@ -2364,6 +2373,7 @@ void update_death() {
     oam_hide_rest(oam_id);
     // Wait for Start button to return to the main menu
     if (pad_trigger(0) & PAD_START) {
+        sfx_play(5,5);
         fade_out(); // Fade out before changing the state
         music_stop(); // Stop death music
         game_state = STATE_MENU; // Switch back to menu
@@ -2412,7 +2422,6 @@ void main(void) {
   while (1) {
     check_game_state(); // Check and update based on the game state
     ppu_wait_nmi();     // Wait for the next NMI (synchronizing game logic with V-blank)
-    nmi_set_callback(famitone_update);
-    
+    nmi_set_callback(famitone_update);    
   }
 }
