@@ -609,12 +609,21 @@ typedef struct {
 } Dialogue;
 
 Dialogue dialogues[] = {
-    {"OLA AMIGO!", 1},
-    {"TUDO BEM?", 2},
-    {"FOQUE SUA ALMA E SE CUREAPERTANDO \x1d !", 3},
-    {"USE SEU FERRAO PARA     ATACAR APERTANDO B.", -1},
-    {"KISAAAH!!", 4},
-    {"HYAA!", -2}
+    {"OLA, VIAJANTE.  ", 1},
+    {"RECEIO QUE SO RESTA EU  PARA DAR AS BOAS-VINDAS.", 2},
+    {"NOSSA CIDADE ESTA QUIETAULTIMAMENTE...", 3},
+    {"OS OUTROS RESIDENTES    DESAPARECERAM.", 4},
+    {"FORAM UM POR UM, PARA ASCAVERNAS ABAIXO.", 5},
+    {"COSTUMA HAVER UM GRANDE REINO SOB NOSSA CIDADE.", 6},
+    {"IMAGINO QUE VOCE  TAMBEMBUSQUE SEUS SONHOS LA   EMBAIXO.", 7},
+    {"BEM, CUIDADO. HA UM AR  DOENTIO QUE PREENCHE O  LUGAR.", 8},
+    {"TALVEZ SONHOS NAO SEJAM GRANDES COISAS AFINAL.", -1},
+  
+    {"KISAAAH!!", 9},
+    {"HYAA!", 10},
+    {"ESSE PROJETO AINDA ESTA EM DESENVOLVIMENTO.", 11},
+    {"SE DESEJA ACOMPANHAR O  DESENVOLVIMENTO, SIGA   NAS REDES SOCIAIS!", 12},
+    {"@VITIMBRO", -2}
 };
 
 // Global variables for dialogue
@@ -959,7 +968,7 @@ void handle_interact_input(char pad) {
         if (can_talk){
           player_state = STATE_DIALOGUE;
           if (collided_elderbug) current_dialogue_index = 0;
-          if (collided_hornet) current_dialogue_index = 4;
+          if (collided_hornet) current_dialogue_index = 9;
           is_dialogue_active = true;
           handle_dialogue();  // Open the dialogue box
         }
