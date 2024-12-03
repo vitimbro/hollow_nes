@@ -2,6 +2,9 @@
 //               Hollow NES - A Demake of Hollow Knight for the NES             //
 //------------------------------------------------------------------------------//
 
+// Made by vitimbro
+// https://github.com/vitimbro
+
 
 // Standard Libraries
 #include <stdlib.h>
